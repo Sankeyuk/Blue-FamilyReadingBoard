@@ -8,7 +8,11 @@
     "avatar": "",
     "galaxy_tagline": "一小时一颗星，一起读出一片星空",
     "footer_note": "",
-    "theme": "starmap"
+    "theme": "starmap",
+    "analytics": {
+      "provider": "cloudflare",
+      "token": "92aa15574b684b509155ab15fd0da3cc"
+    }
   },
   "defaults": {
     "minor": {

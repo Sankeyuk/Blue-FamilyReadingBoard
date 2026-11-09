@@ -55,8 +55,42 @@ const recentFamilyKey = 'coreading:last-reader-family';
 let headerFamilyFailed = false;
 let readerFaceFailed = false;
 let roadPlayed = false;
+let analyticsEnabled = false;
+const analyticsOptOutKey = 'coreading:analytics-opt-out';
 history.scrollRestoration = 'manual';
 let photoObserver, backTimer, gesture;
+
+function analyticsAllowed() {
+  const address = new URL(location.href);
+  const preference = address.searchParams.get('notrack');
+  let optedOut = preference === '1';
+  try {
+    if (preference === '1') localStorage.setItem(analyticsOptOutKey,'1');
+    if (preference === '0') localStorage.removeItem(analyticsOptOutKey);
+    optedOut ||= localStorage.getItem(analyticsOptOutKey) === '1';
+  } catch {
+    // Storage can be unavailable. The explicit opt-out still applies to this open page.
+  }
+  if (preference === '1' || preference === '0') {
+    address.searchParams.delete('notrack');
+    history.replaceState(history.state,'',address);
+  }
+  const hashQuery = new URLSearchParams(address.hash.split('?')[1]);
+  return address.hostname === 'sankeyuk.github.io' && !optedOut &&
+    !address.searchParams.has('face') && address.searchParams.get('shot') !== '1' &&
+    !address.searchParams.has('celebrate') && !hashQuery.has('celebrate');
+}
+
+function enableAnalytics(configuration, allowed) {
+  if (!allowed || analyticsEnabled || configuration?.provider !== 'cloudflare' ||
+      !/^[a-f0-9]{32}$/i.test(configuration.token)) return;
+  const beacon = document.createElement('script');
+  beacon.type = 'module';
+  beacon.src = 'https://static.cloudflareinsights.com/beacon.min.js';
+  beacon.setAttribute('data-cf-beacon',JSON.stringify({token:configuration.token,spa:false}));
+  document.head.append(beacon);
+  analyticsEnabled = true;
+}
 
 function chooseReaderFamily(family) {
   const sets = family?.sets ?? [];
@@ -437,7 +471,8 @@ function renderFooter(live, content) {
   const stamp = fetched ? updatedLabel(fetched) : '';
   return `<footer class="footer">${content.site.footer_note ? `<p>${esc(content.site.footer_note)}</p>` : ''}
     数据更新于 ${stamp ? dateHTML(fetched,stamp) : '待同步'}
-    <span>${live ? `统计截至 ${dateHTML(live.data_through)} · ` : ''}<a class="version-link" href="#diary">v0.1</a></span></footer>`;
+    <span>${live ? `统计截至 ${dateHTML(live.data_through)} · ` : ''}<a class="version-link" href="#diary">v0.1</a></span>
+    ${analyticsEnabled ? '<span>本站使用无 Cookie 的匿名访问统计</span>' : ''}</footer>`;
 }
 
 const backBar = (extra = '') => `<nav class="backbar" aria-label="返回"><a href="#" data-home>‹ 返回首页</a>${extra}
@@ -858,6 +893,7 @@ async function loadTheme(registry, preference) {
 }
 
 let requestId = 0;
+let analyticsEligible = false;
 async function update() {
   if (syncInFlight) return;
   lastReadAt = Date.now();
@@ -870,6 +906,7 @@ async function update() {
   if (live.status === 'fulfilled') state.live = live.value.data;
   if (content.status === 'fulfilled') {
     state.content = {...content.value.data,site:{...fallback.site,...content.value.data.site}};
+    enableAnalytics(state.content.site.analytics,analyticsEligible);
   }
   if (readerFamily === undefined && content.status === 'fulfilled') readerFamily = chooseReaderFamily(state.content.family);
   state.offline = !navigator.onLine || live.status === 'rejected' || Boolean(live.value?.cached);
@@ -882,6 +919,7 @@ async function update() {
   }
 }
 async function start() {
+  analyticsEligible = analyticsAllowed();
   if ('serviceWorker' in navigator) {
     const worker = navigator.serviceWorker;
     worker.addEventListener('controllerchange',scheduleFamilyWarmup);
