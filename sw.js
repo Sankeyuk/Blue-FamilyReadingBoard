@@ -1,6 +1,6 @@
 const scope = self.registration.scope;
 const prefix = `coreading:${scope}:`;
-const shellCache = prefix + 'shell-v01-r12';
+const shellCache = prefix + 'shell-v01-r14';
 const dataCache = prefix + 'live-v1';
 const avatarCache = prefix + 'family-v1';
 const url = (path) => new URL(path,scope).href;
@@ -41,10 +41,12 @@ function liveKey(address) {
 }
 
 async function networkFirst(request, cacheName = dataCache) {
-  const cache = await caches.open(cacheName);
-  const key = liveKey(request.url) || request;
+  const cache = await caches.open(cacheName).catch(() => null);
+  const address = new URL(request.url);
+  if (cacheName === avatarCache) address.searchParams.delete('retry');
+  const key = liveKey(request.url) || address.href;
   const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(),4500);
+  const timer = setTimeout(() => abort.abort(),cacheName === avatarCache ? 12000 : 4500);
   try {
     const response = await fetch(request,{cache:'no-store',signal:abort.signal});
     if (!response.ok) throw new Error('Resource unavailable');
@@ -57,10 +59,10 @@ async function networkFirst(request, cacheName = dataCache) {
           Array.isArray(data.cumulative_by_month));
       if (!valid) throw new Error('Invalid data');
     }
-    await cache.put(key,response.clone());
+    await cache?.put(key,response.clone()).catch(() => {});
     return response;
   } catch {
-    const saved = await cache.match(key);
+    const saved = await cache?.match(key).catch(() => null);
     if (!saved) return new Response(null,{status:503});
     const headers = new Headers(saved.headers);
     headers.set('X-Coreading-Source','cache');
@@ -78,7 +80,13 @@ self.addEventListener('fetch',(event) => {
     const key = event.request.mode === 'navigate' && pages.has(address.href) ? url('./') : address.href;
     event.respondWith((async () => (await (await caches.open(shellCache)).match(key)) || fetch(event.request))());
   } else if (address.href.startsWith(avatarPrefix)) {
-    event.respondWith(networkFirst(event.request,avatarCache));
+    event.respondWith((async () => {
+      if (address.searchParams.has('v') && !address.searchParams.has('retry')) {
+        const cached = await caches.open(avatarCache).then((cache) => cache.match(address.href)).catch(() => null);
+        if (cached) return cached;
+      }
+      return networkFirst(event.request,avatarCache);
+    })());
   } else if (liveKey(address.href) || address.href === copy ||
     /^(themes\/|assets\/|manifest\.webmanifest$)/.test(address.href.slice(scope.length))) {
     event.respondWith(networkFirst(event.request));

@@ -44,7 +44,8 @@ let avatarVisit = null;
 let photoSet = null;
 let avatarSwap = false;
 let lastAvatarSwap = -Infinity;
-let motionAsked = false;
+let motionState = 'idle';
+let ignorePhotoClickUntil = 0;
 let motionPeak = false;
 let homeScroll = 0;
 let readerFamily;
@@ -63,7 +64,7 @@ function chooseReaderFamily(family) {
   const faces = group.faces.map((path,index) => ({path,name:family.people[index]}));
   const blue = faces.findIndex((face) => face.name.toLowerCase() === 'blue');
   const [reader] = faces.splice(blue < 0 ? 1 : blue,1);
-  return {faces:[faces[0],reader,faces[1]],reader};
+  return {group:group.id,faces:[faces[0],reader,faces[1]],reader};
 }
 const bookArt = (star = false) => `<svg viewBox="0 0 24 24" aria-hidden="true">
   <path class="book-line" d="M12 20c-2.2-2-5-3-9-3V8c4 0 6.8 1 9 3 2.2-2 5-3 9-3v9c-4 0-6.8 1-9 3Zm0 0v-9"/>
@@ -449,7 +450,10 @@ function chooseFamilySet() {
   return choices[Math.floor(Math.random() * choices.length)];
 }
 function faceURL(face) {
-  return './family/' + face.split('/').map(encodeURIComponent).join('/');
+  const [group] = face.split('/');
+  const version = state.content.family?.sets.find((item) => item.id === group)?.revision;
+  return './family/' + face.split('/').map(encodeURIComponent).join('/') +
+    (version ? `?v=${encodeURIComponent(version)}` : '');
 }
 function familyFaces(group) {
   return group.faces.map((face,index) =>
@@ -508,17 +512,48 @@ function onFamilyMotion(event) {
   if (high && !motionPeak) void swapFamily();
   motionPeak = high;
 }
+const motionLabels = {
+  idle:'启用摇一摇', pending:'正在请求权限…', enabled:'摇一摇已启用',
+  denied:'动作访问未获允许', unavailable:'此处仅支持轻点换组',
+};
+function paintMotionState() {
+  const button = shell.querySelector('.motion-toggle');
+  if (!button) return;
+  button.textContent = motionLabels[motionState];
+  button.disabled = motionState === 'pending' || motionState === 'enabled' || motionState === 'unavailable';
+}
 async function enableFamilyMotion() {
-  if (motionAsked) return;
-  motionAsked = true;
+  if (motionState === 'pending' || motionState === 'enabled' || motionState === 'unavailable') return;
   const motion = window.DeviceMotionEvent;
-  if (!motion) return;
-  try {
-    if (typeof motion.requestPermission === 'function' && await motion.requestPermission() !== 'granted') return;
-    window.addEventListener('devicemotion',onFamilyMotion);
-  } catch {
-    // Tapping stays available when the platform declines motion access.
+  if (!motion) {
+    motionState = 'unavailable';
+  } else {
+    try {
+      // The permission call must happen directly in the tap handler on iPhone.
+      const permission = typeof motion.requestPermission === 'function' ? motion.requestPermission() : null;
+      motionState = 'pending';
+      paintMotionState();
+      if (permission && await permission !== 'granted') {
+        motionState = 'denied';
+      } else {
+        window.addEventListener('devicemotion',onFamilyMotion);
+        motionState = 'enabled';
+      }
+    } catch {
+      motionState = 'denied';
+    }
   }
+  paintMotionState();
+}
+function revealPhotoControls(card) {
+  const back = card.querySelector('.photo-back');
+  back.classList.add('is-visible');
+  card.classList.add('show-photo-controls');
+  clearTimeout(backTimer);
+  backTimer = setTimeout(() => {
+    back.classList.remove('is-visible');
+    card.classList.remove('show-photo-controls');
+  },5000);
 }
 
 function renderCelebrationPage(live, content, entry, lang) {
@@ -551,6 +586,7 @@ function renderCelebrationPage(live, content, entry, lang) {
           ${copy.message ? `<p class="celebration-message">${esc(copy.message)}</p>` : ''}
         </div>
       </div>
+      <div class="photo-motion"><button type="button" class="motion-toggle"></button></div>
       <div class="photo-languages" role="group" aria-label="庆祝页语言">
         <button type="button" data-lang="zh" aria-label="中文" aria-pressed="${lang === 'zh'}"></button>
         <button type="button" data-lang="en" aria-label="English" aria-pressed="${lang === 'en'}"></button>
@@ -603,22 +639,22 @@ function setPhotoLanguage(lang) {
 shell.addEventListener('pointerdown',(event) => {
   const card = event.target.closest('.celebration');
   if (!event.isPrimary || event.button !== 0 || !card || event.target.closest('a,button')) return;
-  gesture = {id:event.pointerId,x:event.clientX,y:event.clientY,card};
+  gesture = {id:event.pointerId,x:event.clientX,y:event.clientY,card,touch:event.pointerType === 'touch'};
 });
 shell.addEventListener('pointercancel',() => { gesture = null; });
 shell.addEventListener('pointerup',(event) => {
   if (gesture?.id !== event.pointerId) return;
-  const {card,x,y} = gesture;
+  const {card,x,y,touch} = gesture;
   gesture = null;
+  if (!card.isConnected || event.target.closest('a,button')) return;
   const dx = event.clientX-x;
   const dy = event.clientY-y;
-  if (Math.abs(dx) >= 45 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+  const awayFromEdge = x > 28 && x < innerWidth-28;
+  if (touch && awayFromEdge && Math.abs(dx) >= 80 && Math.abs(dx) > Math.abs(dy) * 1.7) {
+    ignorePhotoClickUntil = performance.now()+400;
     setPhotoLanguage(shell.dataset.photoLang === 'en' ? 'zh' : 'en');
   } else if (Math.hypot(dx,dy) < 12 && card.querySelector('.photo-copy').getClientRects().length) {
-    const back = card.querySelector('.photo-back');
-    back.classList.add('is-visible');
-    clearTimeout(backTimer);
-    backTimer = setTimeout(() => back.classList.remove('is-visible'),3000);
+    revealPhotoControls(card);
   }
 });
 
@@ -636,14 +672,17 @@ function route() {
   const achievement = match?.[1] ? Number(match[1]) : (match || page ? null : preview);
   return {preview, lang, page, achievement, subpage:Boolean(page || match || achievement)};
 }
-function render() {
+function render({background = false} = {}) {
   const {live,content} = state;
   const current = route();
+  if (background && shell.querySelector('.celebration') &&
+      shell.dataset.route === String(current.achievement) && shell.dataset.photoLang === current.lang) return;
   state.preview = current.preview;
   const entry = live && current.subpage
     ? achievementEntries(live).find((item) => item.hours === current.achievement) : null;
   if (entry && (entry.hours !== avatarVisit || !content.family?.sets.some((set) => set.id === photoSet))) {
-    photoSet = chooseFamilySet()?.id ?? null;
+    const warmGroup = !photoSet && content.family?.sets.find((set) => set.id === readerFamily?.group);
+    photoSet = (warmGroup || chooseFamilySet())?.id ?? null;
   }
   avatarVisit = entry?.hours ?? null;
   photoObserver?.disconnect();
@@ -662,6 +701,7 @@ function render() {
     if (entry) {
       shell.dataset.photoLang = current.lang;
       shell.innerHTML = renderCelebrationPage(live,content,entry,current.lang);
+      paintMotionState();
       watchPhotoStars();
     } else {
       shell.innerHTML = renderAchievementPage(live,content);
@@ -685,12 +725,19 @@ shell.addEventListener('error', (event) => {
     render();
     return;
   }
-  const strip = event.target.closest?.('.photo-avatar-strip');
-  if (strip) {
-    strip.closest('.celebration').classList.add('no-family');
-    strip.remove();
-    photoObserver?.disconnect();
-    watchPhotoStars();
+  const image = event.target;
+  if (image.matches?.('.photo-avatar-strip img')) {
+    if (!image.dataset.retried && navigator.onLine) {
+      image.dataset.retried = 'true';
+      const retry = new URL(image.src);
+      retry.searchParams.set('retry','1');
+      image.src = retry.href;
+    } else {
+      const placeholder = document.createElement('span');
+      placeholder.className = 'photo-face-fallback';
+      placeholder.textContent = image.alt;
+      image.replaceWith(placeholder);
+    }
   }
 }, true);
 shell.addEventListener('click', (event) => {
@@ -698,7 +745,17 @@ shell.addEventListener('click', (event) => {
     void syncToday();
     return;
   }
-  if (event.target.closest('.photo-avatar-strip')) {
+  if (performance.now() < ignorePhotoClickUntil && event.target.closest('.celebration')) {
+    event.preventDefault();
+    return;
+  }
+  if (event.target.closest('.motion-toggle')) {
+    void enableFamilyMotion();
+    return;
+  }
+  const strip = event.target.closest('.photo-avatar-strip');
+  if (strip) {
+    revealPhotoControls(strip.closest('.celebration'));
     void enableFamilyMotion();
     void swapFamily();
     return;
@@ -787,20 +844,22 @@ async function update() {
   if (!state.offline && syncStatus === 'offline') syncStatus = '';
   const preference = new URLSearchParams(location.search).get('theme') || state.content.site.theme;
   await loadTheme(registry.value?.data,preference);
-  if (id === requestId) render();
+  if (id === requestId) render({background:true});
 }
 async function start() {
   if ('serviceWorker' in navigator) {
     const worker = navigator.serviceWorker;
+    const workerURL = new URL('./sw.js',location.href).href;
+    const controlled = () => worker.controller?.scriptURL === workerURL;
     const register = worker.register('./sw.js').catch(() => null);
-    if (!worker.controller) {
+    if (!controlled()) {
       let listener, timer;
       try {
         await Promise.race([
           register.then((registration) => registration ? new Promise((resolve) => {
-            listener = resolve;
-            worker.addEventListener('controllerchange',listener,{once:true});
-            if (worker.controller) resolve();
+            listener = () => { if (controlled()) resolve(); };
+            worker.addEventListener('controllerchange',listener);
+            listener();
           }) : null),
           new Promise((resolve) => { timer = setTimeout(resolve,2000); }),
         ]);
@@ -818,5 +877,5 @@ function refreshForeground() {
 document.addEventListener('visibilitychange',refreshForeground);
 window.addEventListener('pageshow',refreshForeground);
 window.addEventListener('online',update);
-window.addEventListener('offline',() => { state.offline = true; render(); });
+window.addEventListener('offline',() => { state.offline = true; render({background:true}); });
 void start();

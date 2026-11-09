@@ -123,7 +123,8 @@
           "02_race/sankey.png",
           "02_race/blue.png",
           "02_race/miko.png"
-        ]
+        ],
+        "revision": "373ed01dadc7808a"
       },
       {
         "id": "03_hike",
@@ -133,7 +134,8 @@
           "03_hike/sankey.png",
           "03_hike/blue.png",
           "03_hike/miko.png"
-        ]
+        ],
+        "revision": "9b0d61fa62379021"
       }
     ]
   }

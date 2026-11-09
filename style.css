@@ -180,12 +180,12 @@ main { display: grid; gap: 12px; }
   display: flex; justify-content: center; align-items: center; isolation: isolate;
   padding: 4px 0 0; border: 0; background: transparent; cursor: pointer; touch-action: manipulation;
 }
-.photo-avatar-strip img {
+.photo-avatar-strip > :is(img,.photo-face-fallback) {
   display: block; width: clamp(46px,14vw,68px); height: auto; aspect-ratio: 1;
   border-radius: 50%; border: 1px solid var(--ds-hero-gold);
   background: var(--ds-surface); box-shadow: var(--ds-shadow-card);
 }
-.photo-avatar-strip img:nth-child(2) { width: clamp(60px,18.2vw,88px); margin: 0 -7px 8px; z-index: 1; }
+.photo-avatar-strip > :is(img,.photo-face-fallback):nth-child(2) { width: clamp(60px,18.2vw,88px); margin: 0 -7px 8px; z-index: 1; }
 .photo-avatar-strip:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 4px; border-radius: var(--ds-radius-chip); }
 .faces-out img { animation: family-exit 105ms ease-in both; }
 .faces-out img:nth-child(2) { animation-delay: 15ms; }
@@ -208,8 +208,8 @@ main { display: grid; gap: 12px; }
 @media (orientation: landscape) {
   .photo-feature .photo-medal,.no-family .photo-feature { display: none; }
   .no-family .celebration-layout { grid-template-columns: 1fr; }
-  .photo-avatar-strip img { width: min(24svh,13vw); }
-  .photo-avatar-strip img:nth-child(2) { width: min(31.2svh,16.9vw); margin: 0 -11px 14px; }
+  .photo-avatar-strip > :is(img,.photo-face-fallback) { width: min(24svh,13vw); }
+  .photo-avatar-strip > :is(img,.photo-face-fallback):nth-child(2) { width: min(31.2svh,16.9vw); margin: 0 -11px 14px; }
 }
 
 .header-badge { width: 104px; height: 64px; position: relative; flex: 0 0 104px; }
@@ -256,3 +256,10 @@ main { display: grid; gap: 12px; }
 .sync-result { color: var(--ds-text-strong); font-weight: var(--ds-weight-strong); }
 .road-target { position: absolute; right: -5px; top: 1px; display: grid; place-items: center; width: 44px; height: 44px; z-index: 2; border-radius: 50%; }
 .road-target .road-goal { position: static; }
+
+.photo-avatar-strip > .photo-face-fallback { display: grid; place-items: center; color: var(--ds-text-strong); font-size: 11px; font-weight: var(--ds-weight-strong); }
+.photo-motion { position: absolute; left: max(12px,env(safe-area-inset-left)); bottom: max(9px,env(safe-area-inset-bottom)); z-index: 2; }
+.motion-toggle { border: 1px solid var(--ds-hero-line); border-radius: var(--ds-radius-chip); background: var(--ds-surface); color: var(--ds-text-strong); padding: 6px 9px; font: 11px var(--ds-font); }
+@media (orientation: landscape) {
+  .celebration:not(.show-photo-controls) .photo-motion:not(:focus-within) { opacity: 0; pointer-events: none; }
+}
