@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "site": {
+    "name": "共读星图",
+    "short_name": "共读星图",
+    "subtitle": "BLUE 家庭共读",
+    "icon": "",
+    "avatar": "",
+    "galaxy_tagline": "一小时一颗星，一起读出一片星空",
+    "footer_note": "",
+    "theme": "starmap"
+  },
+  "defaults": {
+    "minor": {
+      "badge": "第 {hours} 小时",
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。",
+      "message": ""
+    },
+    "major": {
+      "badge": "我们读了 {hours} 小时",
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。",
+      "message": ""
+    }
+  },
+  "milestones": {
+    "50": {
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。"
+    },
+    "100": {
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。"
+    },
+    "150": {
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。"
+    },
+    "200": {
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。"
+    },
+    "250": {
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。"
+    },
+    "300": {
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。"
+    },
+    "350": {
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。"
+    },
+    "400": {
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。"
+    },
+    "450": {
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。"
+    },
+    "500": {
+      "celebration": "由孩子挑一份礼物，拍一张「我们读了 {hours} 小时」的全家合照。写日记，成就日。"
+    }
+  },
+  "conversions": [
+    {
+      "unit": "天",
+      "hours_each": 24.0,
+      "text": "不吃不睡，连着读了 {n} 天",
+      "show": true
+    },
+    {
+      "unit": "个学校日",
+      "hours_each": 4.0,
+      "text": "按小学每天 6 节课、每节 40 分钟算，相当于上了 {n} 天学",
+      "show": true
+    },
+    {
+      "unit": "个暑假",
+      "hours_each": 60.0,
+      "text": "暑假约 60 天，每天读 1 小时，要读 {n} 个暑假",
+      "show": true
+    },
+    {
+      "unit": "集小猪佩奇",
+      "hours_each": 0.083333,
+      "text": "一集约 5 分钟，可以连看 {n} 集",
+      "show": true
+    },
+    {
+      "unit": "部动画电影",
+      "hours_each": 1.5,
+      "text": "一部动画电影约 90 分钟，相当于 {n} 部",
+      "show": false
+    },
+    {
+      "unit": "个睡前故事",
+      "hours_each": 0.25,
+      "text": "一个睡前故事约 15 分钟，相当于讲了 {n} 个",
+      "show": false
+    },
+    {
+      "unit": "节课",
+      "hours_each": 0.666667,
+      "text": "一节课 40 分钟，相当于多上了 {n} 节课",
+      "show": false
+    }
+  ],
+  "photo": {
+    "zh": {
+      "before": "我们一起读了",
+      "after": "小时"
+    },
+    "en": {
+      "before": "Together we've read",
+      "after": "hours"
+    }
+  },
+  "family": {
+    "people": [
+      "Sankey",
+      "Blue",
+      "Miko"
+    ],
+    "sets": [
+      {
+        "id": "02_race",
+        "name": "障碍赛",
+        "date": "2026-10-17",
+        "faces": [
+          "02_race/sankey.png",
+          "02_race/blue.png",
+          "02_race/miko.png"
+        ]
+      },
+      {
+        "id": "03_hike",
+        "name": "爬山合照",
+        "date": "2026-10-07",
+        "faces": [
+          "03_hike/sankey.png",
+          "03_hike/blue.png",
+          "03_hike/miko.png"
+        ]
+      }
+    ]
+  }
+}

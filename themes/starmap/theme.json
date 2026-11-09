@@ -1,0 +1,14 @@
+{
+  "signature": "stars",
+  "font": "assets/Inter-Variable.ttf",
+  "stars": {
+    "colors": ["#9fc2ef", "#35aaf4", "#6b8fc4"],
+    "weights": [60, 25, 13],
+    "radius": [0.6, 1.5],
+    "goldEvery": 50,
+    "goldRadius": 2.15,
+    "viewBox": [360, 188],
+    "slope": 0.51,
+    "spread": 0.19
+  }
+}

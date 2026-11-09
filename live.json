@@ -1,0 +1,446 @@
+{
+ "schema_version": 1,
+ "generated_at": "2026-11-09T15:51:36+08:00",
+ "fetched_at": "2026-11-09T15:48:22+08:00",
+ "data_through": "2026-11-09",
+ "today": {
+  "date": "2026-11-09",
+  "weekday": 1,
+  "minutes": 0.0,
+  "level": 0,
+  "read": false,
+  "is_partial": true
+ },
+ "streak": {
+  "current": 47,
+  "longest": {
+   "days": 75,
+   "from": "2026-03-31",
+   "to": "2026-06-13",
+   "hours": 71.52
+  }
+ },
+ "week": {
+  "period": "2026-W46",
+  "range": [
+   "2026-11-09",
+   "2026-11-15"
+  ],
+  "days_elapsed": 1,
+  "record_days": 0,
+  "coverage": 0.0,
+  "total_minutes": 0.0,
+  "total_hours": 0.0,
+  "avg_per_day": 0.0,
+  "days_30": 0,
+  "days_60": 0,
+  "is_partial": true,
+  "days": [
+   {
+    "date": "2026-11-09",
+    "weekday": 1,
+    "minutes": 0.0,
+    "level": 0
+   }
+  ],
+  "prev_same_period": {
+   "period": "2026-W45",
+   "days_elapsed": 1,
+   "record_days": 1,
+   "coverage": 1.0,
+   "total_minutes": 17.9,
+   "total_hours": 0.3,
+   "avg_per_day": 17.9,
+   "days_30": 0,
+   "days_60": 0,
+   "is_partial": false
+  }
+ },
+ "month": {
+  "period": "2026-11",
+  "range": [
+   "2026-11-01",
+   "2026-11-30"
+  ],
+  "days_elapsed": 9,
+  "record_days": 8,
+  "coverage": 0.8889,
+  "total_minutes": 534.25,
+  "total_hours": 8.9,
+  "avg_per_day": 59.36,
+  "days_30": 7,
+  "days_60": 6,
+  "is_partial": true,
+  "calendar": [
+   {
+    "date": "2026-11-01",
+    "weekday": 7,
+    "minutes": 66.8,
+    "level": 3
+   },
+   {
+    "date": "2026-11-02",
+    "weekday": 1,
+    "minutes": 17.9,
+    "level": 1
+   },
+   {
+    "date": "2026-11-03",
+    "weekday": 2,
+    "minutes": 80.32,
+    "level": 3
+   },
+   {
+    "date": "2026-11-04",
+    "weekday": 3,
+    "minutes": 78.27,
+    "level": 3
+   },
+   {
+    "date": "2026-11-05",
+    "weekday": 4,
+    "minutes": 76.75,
+    "level": 3
+   },
+   {
+    "date": "2026-11-06",
+    "weekday": 5,
+    "minutes": 57.28,
+    "level": 2
+   },
+   {
+    "date": "2026-11-07",
+    "weekday": 6,
+    "minutes": 72.27,
+    "level": 3
+   },
+   {
+    "date": "2026-11-08",
+    "weekday": 7,
+    "minutes": 84.67,
+    "level": 3
+   },
+   {
+    "date": "2026-11-09",
+    "weekday": 1,
+    "minutes": 0.0,
+    "level": 0
+   }
+  ],
+  "prev_same_period": {
+   "period": "2026-10",
+   "days_elapsed": 9,
+   "record_days": 9,
+   "coverage": 1.0,
+   "total_minutes": 557.83,
+   "total_hours": 9.3,
+   "avg_per_day": 61.98,
+   "days_30": 9,
+   "days_60": 3,
+   "is_partial": false
+  }
+ },
+ "lifetime": {
+  "since": "2023-09-17",
+  "first_record": "2024-01-12",
+  "total_hours": 296.09,
+  "record_days": 454
+ },
+ "next": {
+  "next_milestone_hours": 300,
+  "next_milestone_kind": "major",
+  "hours_to_milestone": 3.91,
+  "next_milestone_eta": "2026-11-14",
+  "next_milestone_celebration": "第 300 小时：由孩子挑一本新书，再拍一张「我们读了 300 小时」的全家合照",
+  "next_major_hours": 300,
+  "hours_to_major": 3.91,
+  "next_major_eta": "2026-11-14",
+  "pace_hours_per_day": 0.958,
+  "pace_days": 28
+ },
+ "roadmap": [
+  {
+   "hours": 50,
+   "kind": "minor",
+   "reached": "2025-11-25",
+   "days_since_prev": null,
+   "is_next": false,
+   "eta": null,
+   "celebration": "第 50 小时：由孩子挑一本新书，晚饭时一家人说说这一阶段最喜欢的一本"
+  },
+  {
+   "hours": 100,
+   "kind": "major",
+   "reached": "2026-03-31",
+   "days_since_prev": 126,
+   "is_next": false,
+   "eta": null,
+   "celebration": "第 100 小时：由孩子挑一本新书，再拍一张「我们读了 100 小时」的全家合照"
+  },
+  {
+   "hours": 150,
+   "kind": "minor",
+   "reached": "2026-05-23",
+   "days_since_prev": 53,
+   "is_next": false,
+   "eta": null,
+   "celebration": "第 150 小时：由孩子挑一本新书，晚饭时一家人说说这一阶段最喜欢的一本"
+  },
+  {
+   "hours": 200,
+   "kind": "major",
+   "reached": "2026-07-21",
+   "days_since_prev": 59,
+   "is_next": false,
+   "eta": null,
+   "celebration": "第 200 小时：由孩子挑一本新书，再拍一张「我们读了 200 小时」的全家合照"
+  },
+  {
+   "hours": 250,
+   "kind": "minor",
+   "reached": "2026-09-24",
+   "days_since_prev": 65,
+   "is_next": false,
+   "eta": null,
+   "celebration": "第 250 小时：由孩子挑一本新书，晚饭时一家人说说这一阶段最喜欢的一本"
+  },
+  {
+   "hours": 300,
+   "kind": "major",
+   "reached": null,
+   "days_since_prev": null,
+   "is_next": true,
+   "eta": "2026-11-14",
+   "celebration": "第 300 小时：由孩子挑一本新书，再拍一张「我们读了 300 小时」的全家合照"
+  },
+  {
+   "hours": 350,
+   "kind": "minor",
+   "reached": null,
+   "days_since_prev": null,
+   "is_next": false,
+   "eta": "2027-01-05",
+   "celebration": "第 350 小时：由孩子挑一本新书，晚饭时一家人说说这一阶段最喜欢的一本"
+  },
+  {
+   "hours": 400,
+   "kind": "major",
+   "reached": null,
+   "days_since_prev": null,
+   "is_next": false,
+   "eta": "2027-02-26",
+   "celebration": "第 400 小时：由孩子挑一本新书，再拍一张「我们读了 400 小时」的全家合照"
+  }
+ ],
+ "milestones_reached": [
+  {
+   "hours": 50,
+   "kind": "minor",
+   "date": "2025-11-25",
+   "days_since_prev": null
+  },
+  {
+   "hours": 100,
+   "kind": "major",
+   "date": "2026-03-31",
+   "days_since_prev": 126
+  },
+  {
+   "hours": 150,
+   "kind": "minor",
+   "date": "2026-05-23",
+   "days_since_prev": 53
+  },
+  {
+   "hours": 200,
+   "kind": "major",
+   "date": "2026-07-21",
+   "days_since_prev": 59
+  },
+  {
+   "hours": 250,
+   "kind": "minor",
+   "date": "2026-09-24",
+   "days_since_prev": 65
+  }
+ ],
+ "celebrate": null,
+ "cumulative_by_month": [
+  {
+   "month": "2023-09",
+   "cum_hours": 0.0
+  },
+  {
+   "month": "2023-10",
+   "cum_hours": 0.0
+  },
+  {
+   "month": "2023-11",
+   "cum_hours": 0.0
+  },
+  {
+   "month": "2023-12",
+   "cum_hours": 0.0
+  },
+  {
+   "month": "2024-01",
+   "cum_hours": 3.36
+  },
+  {
+   "month": "2024-02",
+   "cum_hours": 3.74
+  },
+  {
+   "month": "2024-03",
+   "cum_hours": 3.84
+  },
+  {
+   "month": "2024-04",
+   "cum_hours": 3.9
+  },
+  {
+   "month": "2024-05",
+   "cum_hours": 5.85
+  },
+  {
+   "month": "2024-06",
+   "cum_hours": 12.8
+  },
+  {
+   "month": "2024-07",
+   "cum_hours": 16.6
+  },
+  {
+   "month": "2024-08",
+   "cum_hours": 19.79
+  },
+  {
+   "month": "2024-09",
+   "cum_hours": 22.0
+  },
+  {
+   "month": "2024-10",
+   "cum_hours": 23.32
+  },
+  {
+   "month": "2024-11",
+   "cum_hours": 24.47
+  },
+  {
+   "month": "2024-12",
+   "cum_hours": 24.98
+  },
+  {
+   "month": "2025-01",
+   "cum_hours": 25.63
+  },
+  {
+   "month": "2025-02",
+   "cum_hours": 25.63
+  },
+  {
+   "month": "2025-03",
+   "cum_hours": 29.51
+  },
+  {
+   "month": "2025-04",
+   "cum_hours": 33.12
+  },
+  {
+   "month": "2025-05",
+   "cum_hours": 39.16
+  },
+  {
+   "month": "2025-06",
+   "cum_hours": 41.7
+  },
+  {
+   "month": "2025-07",
+   "cum_hours": 41.88
+  },
+  {
+   "month": "2025-08",
+   "cum_hours": 44.47
+  },
+  {
+   "month": "2025-09",
+   "cum_hours": 46.71
+  },
+  {
+   "month": "2025-10",
+   "cum_hours": 47.83
+  },
+  {
+   "month": "2025-11",
+   "cum_hours": 50.28
+  },
+  {
+   "month": "2025-12",
+   "cum_hours": 58.01
+  },
+  {
+   "month": "2026-01",
+   "cum_hours": 70.79
+  },
+  {
+   "month": "2026-02",
+   "cum_hours": 84.7
+  },
+  {
+   "month": "2026-03",
+   "cum_hours": 100.81
+  },
+  {
+   "month": "2026-04",
+   "cum_hours": 127.43
+  },
+  {
+   "month": "2026-05",
+   "cum_hours": 157.86
+  },
+  {
+   "month": "2026-06",
+   "cum_hours": 181.86
+  },
+  {
+   "month": "2026-07",
+   "cum_hours": 210.19
+  },
+  {
+   "month": "2026-08",
+   "cum_hours": 233.37
+  },
+  {
+   "month": "2026-09",
+   "cum_hours": 255.81
+  },
+  {
+   "month": "2026-10",
+   "cum_hours": 287.19
+  },
+  {
+   "month": "2026-11",
+   "cum_hours": 296.09
+  }
+ ],
+ "levels_by_year": {
+  "2023": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  "2024": "000000000001020211111100010000000000000000000110000000000000000000001000000000000000000000000000010000000000000000000000000000000010111101000000010000110012120202101000111102012021000110000000100000030000011100210000100200011000100011111010000001000001000000001100000010000101000000000000001001000010011000100010001000000000001000001000000000000111000000000000000000",
+  "2025": "01000000010000000001000000000000000000000000000000000000000210010001100000000200002000200010001101000121020001010000100020001020200121010002010010100000000001002000101010100011000000000000000000000000001000000000012002100000001100010000000110000200000010000000000000010120000000000101000000100001000000001000000000100010010011001000010010100011203112220000011200200",
+  "2026": "2012022121110210222011022121110121131121110122222122111323112122111211212222212221321112031333312222322232223222132223233123322322312233233333323322322312223232232202222223222012223223333222231223201311222333232222303323103332233122202222222313333212220201003002120131233222223232323332221223333322333331313332330"
+ },
+ "modules": {
+  "gifts": {
+   "status": "reserved",
+   "issue": "DE-8"
+  },
+  "booklist": {
+   "status": "reserved",
+   "issue": "DE-9"
+  },
+  "allowance": {
+   "status": "reserved",
+   "issue": null
+  }
+ }
+}

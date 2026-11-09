@@ -1,0 +1,43 @@
+@font-face {
+  font-family: Inter;
+  src: url("./assets/Inter-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+[data-theme="starmap"] {
+  --ds-page-bg: #f3f5f8;
+  --ds-page-top: linear-gradient(#eef7ff, #e7f4ff 60%, #f3f5f8);
+  --ds-surface: #ffffff;
+  --ds-surface-muted: #f8fafc;
+  --ds-line: #e5ebf2;
+  --ds-text: #253041;
+  --ds-text-strong: #161f33;
+  --ds-text-muted: #8a95a5;
+  --ds-accent: #35aaf4;
+  --ds-accent-2: #62d4e9;
+  --ds-accent-soft: #e8f7ff;
+  --ds-gold: #f2c56b;
+  --ds-level-0: #e9eef4;
+  --ds-level-1: #a9d4f5;
+  --ds-level-2: var(--ds-accent);
+  --ds-level-3: var(--ds-gold);
+  --ds-badge-locked: #c9d2dd;
+  --ds-hero-bg: linear-gradient(160deg, #ffffff 0%, #eef7ff 55%, #dcefff 100%);
+  --ds-hero-line: #d6e6f5;
+  --ds-hero-text: #161f33;
+  --ds-hero-gold: #c8922a;
+  --ds-hero-chip: rgba(53,170,244,.08);
+  --ds-photo-number: #1b2a4a;
+  --ds-font: Inter, -apple-system, "PingFang SC", sans-serif;
+  --ds-weight-strong: 800;
+  --ds-weight-heavy: 950;
+  --ds-radius-card: 18px;
+  --ds-radius-hero: 20px;
+  --ds-radius-chip: 14px;
+  --ds-shadow-card: 0 8px 22px rgba(48,64,88,.06);
+  --ds-shadow-hero: 0 18px 44px -22px rgba(42,59,82,.28);
+  --ds-nav-bg: rgba(255,255,255,.97);
+  --ds-nav-shadow: 0 -10px 28px rgba(42,59,82,.12);
+  --ds-nav-active: #35aaf4;
+  --ds-radius-nav: 26px;
+}
