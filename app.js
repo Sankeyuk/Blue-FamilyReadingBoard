@@ -49,6 +49,9 @@ let ignorePhotoClickUntil = 0;
 let motionPeak = false;
 let homeScroll = 0;
 let readerFamily;
+let familyWarmup = false;
+const warmedFaces = new Set();
+const recentFamilyKey = 'coreading:last-reader-family';
 let headerFamilyFailed = false;
 let readerFaceFailed = false;
 let roadPlayed = false;
@@ -59,8 +62,14 @@ function chooseReaderFamily(family) {
   const sets = family?.sets ?? [];
   if (!sets.length) return null;
   const forced = new URLSearchParams(location.search).get('face');
-  const group = sets.find((item) => item.faces.includes(forced + '.png')) ??
-    sets[Math.floor(Math.random() * sets.length)];
+  let previous;
+  try { previous = sessionStorage.getItem(recentFamilyKey); } catch {}
+  const choices = sets.length > 1 ? sets.filter((set) => set.id !== previous) : sets;
+  const forcedGroup = sets.find((item) => item.faces.includes(forced + '.png'));
+  const group = forcedGroup ?? choices[Math.floor(Math.random() * choices.length)];
+  if (!forcedGroup) {
+    try { sessionStorage.setItem(recentFamilyKey,group.id); } catch {}
+  }
   const faces = group.faces.map((path,index) => ({path,name:family.people[index]}));
   const blue = faces.findIndex((face) => face.name.toLowerCase() === 'blue');
   const [reader] = faces.splice(blue < 0 ? 1 : blue,1);
@@ -455,6 +464,29 @@ function faceURL(face) {
   return './family/' + face.split('/').map(encodeURIComponent).join('/') +
     (version ? `?v=${encodeURIComponent(version)}` : '');
 }
+function scheduleFamilyWarmup() {
+  if (familyWarmup || !navigator.onLine || !navigator.serviceWorker?.controller) return;
+  familyWarmup = true;
+  const warm = async () => {
+    try {
+      // Give the three visible portraits first use of the connection.
+      const visible = [...shell.querySelectorAll('.header-family img, .photo-avatar-strip img')];
+      await Promise.allSettled(visible.map((image) => image.decode()));
+      const urls = (state.content.family?.sets ?? []).filter((set) => set.revision)
+        .flatMap((set) => set.faces.map(faceURL)).filter((url) => !warmedFaces.has(url));
+      for (let index = 0; index < urls.length && navigator.onLine; index += 2) {
+        await Promise.allSettled(urls.slice(index,index+2).map(async (url) => {
+          const response = await fetch(url,{priority:'low'});
+          if (response.ok) warmedFaces.add(url);
+        }));
+      }
+    } finally {
+      familyWarmup = false;
+    }
+  };
+  if ('requestIdleCallback' in window) window.requestIdleCallback(() => void warm(),{timeout:1200});
+  else setTimeout(() => void warm(),350);
+}
 function familyFaces(group) {
   return group.faces.map((face,index) =>
     `<img src="${esc(faceURL(face))}" width="256" height="256" alt="${esc(state.content.family.people[index])}">`).join('');
@@ -844,11 +876,15 @@ async function update() {
   if (!state.offline && syncStatus === 'offline') syncStatus = '';
   const preference = new URLSearchParams(location.search).get('theme') || state.content.site.theme;
   await loadTheme(registry.value?.data,preference);
-  if (id === requestId) render({background:true});
+  if (id === requestId) {
+    render({background:true});
+    scheduleFamilyWarmup();
+  }
 }
 async function start() {
   if ('serviceWorker' in navigator) {
     const worker = navigator.serviceWorker;
+    worker.addEventListener('controllerchange',scheduleFamilyWarmup);
     const workerURL = new URL('./sw.js',location.href).href;
     const controlled = () => worker.controller?.scriptURL === workerURL;
     const register = worker.register('./sw.js').catch(() => null);
