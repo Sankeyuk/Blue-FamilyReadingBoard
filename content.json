@@ -140,6 +140,28 @@
           "03_hike/miko.png"
         ],
         "revision": "9b0d61fa62379021"
+      },
+      {
+        "id": "04_singapore",
+        "name": "04_singapore",
+        "date": "",
+        "faces": [
+          "04_singapore/sankey.png",
+          "04_singapore/blue.png",
+          "04_singapore/miko.png"
+        ],
+        "revision": "a3588616a0602aa1"
+      },
+      {
+        "id": "05_birthday_2024",
+        "name": "05_birthday_2024",
+        "date": "",
+        "faces": [
+          "05_birthday_2024/sankey.png",
+          "05_birthday_2024/blue.png",
+          "05_birthday_2024/miko.png"
+        ],
+        "revision": "908c9495601b0f34"
       }
     ]
   }
