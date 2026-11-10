@@ -306,8 +306,8 @@ function renderToday(live) {
   return `<section class="panel today" data-rings="today">
     <div class="heading"><h2>今天</h2><div class="today-actions">${dateHTML(today.date, shortDate(today.date))}
       <span class="sync-result" role="status"></span><button class="sync-button" type="button"><span aria-hidden="true">↻</span> 同步</button></div></div>
-    <div class="today-columns${yesterday ? ' has-yesterday' : ''}">${column(today,'今天',true)}
-      ${yesterday ? column(yesterday,'昨天',false) : ''}</div>
+    <div class="today-columns${yesterday ? ' has-yesterday' : ''}">${yesterday ? column(yesterday,'昨天',false) : ''}
+      ${column(today,'今天',true)}</div>
     <p class="today-note">${note}</p>
     <p class="sync-caption" role="status"></p>
     <p class="sync-tip" hidden>晚上每 5 分钟取一次数，读完记得在 aTimeLogger 停表</p></section>`;
