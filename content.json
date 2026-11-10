@@ -143,8 +143,8 @@
       },
       {
         "id": "04_singapore",
-        "name": "04_singapore",
-        "date": "",
+        "name": "新加坡合照",
+        "date": "2025-03-23",
         "faces": [
           "04_singapore/sankey.png",
           "04_singapore/blue.png",
@@ -154,8 +154,8 @@
       },
       {
         "id": "05_birthday_2024",
-        "name": "05_birthday_2024",
-        "date": "",
+        "name": "2024 生日合照",
+        "date": "2024-02-18",
         "faces": [
           "05_birthday_2024/sankey.png",
           "05_birthday_2024/blue.png",
