@@ -1,6 +1,6 @@
 const scope = self.registration.scope;
 const prefix = `coreading:${scope}:`;
-const shellCache = prefix + 'shell-v01-r16';
+const shellCache = prefix + 'shell-v01-r17';
 const dataCache = prefix + 'live-v1';
 const avatarCache = prefix + 'family-v1';
 const url = (path) => new URL(path,scope).href;

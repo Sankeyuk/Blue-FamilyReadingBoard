@@ -1,6 +1,11 @@
 const shell = document.getElementById('shell');
 const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
 const levels = ['无记录', '< 30 分', '30–59 分', '≥ 60 分'];
+// DESIGN.md 固定含义，主题不能改。
+const READING_DAY_MINUTES = 5;
+const BLUE_RING_MINUTES = 30;
+const GOLD_RING_MINUTES = 60;
+const WEEK_GOAL_MINUTES = 210;
 const fallback = {
   site: {name:'共读星图', short_name:'共读星图', subtitle:'BLUE 家庭共读',
     galaxy_tagline:'一小时一颗星，一起读出一片星空', footer_note:'', theme:'starmap'},
@@ -33,6 +38,9 @@ const dateValue = (value) => new Date(`${value}T00:00:00Z`);
 const dayMonth = (value) => value.slice(5).split('-').map(Number).join('/');
 const firstReadingYear = (live) => (live.lifetime.first_record || live.lifetime.since).slice(0,4);
 const shortDate = (value) => `${Number(value.slice(5,7))} 月 ${Number(value.slice(8))} 日`;
+const minutesLabel = (value) => `${n(Math.floor(value))} 分钟`;
+const weekdayLabel = (date) => `周${weekdays[(dateValue(date).getUTCDay() + 6) % 7]}`;
+const offsetDate = (start, offset) => new Date(start.getTime() + offset * 86400000).toISOString().slice(0,10);
 const dateHTML = (value, label = value) => `<time datetime="${esc(value)}">${esc(label)}</time>`;
 const heading = (title, meta = '') => `<div class="heading"><h2>${title}</h2>${meta}</div>`;
 const legend = () => `<div class="legend">${levels.map((label, i) =>
@@ -195,6 +203,43 @@ let syncInFlight = false;
 let nextSyncAt = 0;
 let lastReadAt = 0;
 let syncLabelTimer;
+let selectedWeekDate = null;
+let selectedMonthDate = null;
+let ringObserver;
+const animatedRingSections = new Set();
+
+const ringGradient = `<svg class="ring-definitions" width="0" height="0" aria-hidden="true" focusable="false"><defs>
+  <linearGradient id="reading-ring-blue" x1="0" x2="1" y1="0" y2="1" gradientUnits="objectBoundingBox">
+    <stop class="ring-accent"/><stop class="ring-accent-end" offset="1"/>
+  </linearGradient></defs></svg>`;
+
+function readingRing(fraction, center, gold = false) {
+  const fill = Math.min(1, fraction) * 100;
+  return `<span class="reading-ring${gold ? ' ring-gold' : ''}">
+    <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+      <circle class="ring-track" cx="50" cy="50" r="44"/>
+      ${fill > 0 ? `<circle class="ring-progress" cx="50" cy="50" r="44" pathLength="100"
+        transform="rotate(-90 50 50)" stroke-dasharray="${fill} 100"/>` : ''}
+    </svg><span class="ring-center">${center}</span></span>`;
+}
+function dayRing(minutes, today = false) {
+  const mark = minutes >= READING_DAY_MINUTES ? '✓' : today && !minutes ? '今' : '';
+  return readingRing(minutes / BLUE_RING_MINUTES, mark, minutes >= GOLD_RING_MINUTES);
+}
+function animateReadingRings() {
+  if (!('IntersectionObserver' in window)) return;
+  ringObserver = new IntersectionObserver((entries) => {
+    for (const {target, isIntersecting} of entries) {
+      if (!isIntersecting || animatedRingSections.has(target.dataset.rings)) continue;
+      animatedRingSections.add(target.dataset.rings);
+      target.classList.add('draw-reading-rings');
+      ringObserver.unobserve(target);
+    }
+  });
+  for (const section of shell.querySelectorAll('[data-rings]')) {
+    if (!animatedRingSections.has(section.dataset.rings)) ringObserver.observe(section);
+  }
+}
 
 function updatedLabel(fetched) {
   const date = new Date(fetched);
@@ -250,15 +295,20 @@ async function syncToday() {
   }
 }
 
-function renderToday(live, content) {
-  const {today} = live;
+function renderToday(live) {
+  const {today, yesterday} = live;
   const stale = live.fetched_at && today.date > live.fetched_at.slice(0,10);
   const note = today.read ? '今天已共读' : today.is_partial
     ? (stale ? '暂未同步到今日记录 · 今日未结束' : '今天还没记录 · 今日未结束') : '这一天没有共读记录';
-  return `<section class="panel today">
+  const column = (day, label, current) => `<div class="today-column${current ? ' is-today' : ''}">
+    <span aria-hidden="true">${dayRing(day.minutes,current)}</span>
+    <div><b>${label}</b><p><strong>${n(Math.floor(day.minutes))}</strong> 分钟</p></div></div>`;
+  return `<section class="panel today" data-rings="today">
     <div class="heading"><h2>今天</h2><div class="today-actions">${dateHTML(today.date, shortDate(today.date))}
       <span class="sync-result" role="status"></span><button class="sync-button" type="button"><span aria-hidden="true">↻</span> 同步</button></div></div>
-    <p class="summary"><strong>${n(today.minutes)}</strong><span>分钟</span><span class="today-note">${note}</span></p>
+    <div class="today-columns${yesterday ? ' has-yesterday' : ''}">${column(today,'今天',true)}
+      ${yesterday ? column(yesterday,'昨天',false) : ''}</div>
+    <p class="today-note">${note}</p>
     <p class="sync-caption" role="status"></p>
     <p class="sync-tip" hidden>晚上每 5 分钟取一次数，读完记得在 aTimeLogger 停表</p></section>`;
 }
@@ -319,48 +369,90 @@ function playBeanRoad() {
   setTimeout(() => road.querySelectorAll('.road-passed').forEach((bean) => bean.remove()),duration);
 }
 
-function dayCell(day, date, through, label) {
-  const level = Number(day?.level ?? 0);
-  const description = day ? `${date} · ${n(day.minutes)} 分钟` : `${date} · 未到统计日`;
-  return `<span class="day ${day ? `level-${level}` : 'future'} ${date === through ? 'current' : ''}" title="${description}" aria-label="${description}">${label}</span>`;
-}
 function comparison(current, prior, label, monthly = false) {
   if (!prior?.days_elapsed) return `<p class="compare">${label}暂无数据</p>`;
   const diff = Math.round((current.total_minutes - prior.total_minutes) * 100) / 100;
-  const change = diff ? `${diff > 0 ? '+' : '−'}${n(Math.abs(diff))} 分钟` : '时长持平';
+  const change = Math.floor(Math.abs(diff)) ? `${diff > 0 ? '+' : '−'}${minutesLabel(Math.abs(diff))}` : '时长持平';
   const reference = monthly ? `${prior.record_days} 天 · 覆盖率 ${p(prior.coverage)}` :
-    `${prior.record_days} 天 · ${n(prior.total_minutes)} 分钟`;
+    `${prior.record_days} 天 · ${minutesLabel(prior.total_minutes)}`;
   return `<p class="compare">${label} ${reference} · ${change}</p>`;
 }
-function calendar(data, monthly) {
-  const period = monthly ? data.month : data.week;
-  const days = new Map((monthly ? period.calendar : period.days).map((day) => [day.date, day]));
-  const start = dateValue(period.range[0]);
-  const count = monthly ? dateValue(period.range[1]).getUTCDate() : 7;
-  const offset = monthly ? (start.getUTCDay() + 6) % 7 : 0;
-  const headers = weekdays.map((day) => `<span class="week-head">${day}</span>`).join('');
-  const cells = Array.from({length:count}, (_, i) => {
-    const date = new Date(start.getTime() + i * 86400000).toISOString().slice(0,10);
-    return dayCell(days.get(date), date, data.data_through, monthly ? i + 1 : dayMonth(date));
+
+function renderWeek(live) {
+  const {week, data_through: through} = live;
+  const [first,last] = week.range;
+  const start = dateValue(first);
+  const minutesByDay = new Map(week.days.map((day) => [day.date,day.minutes]));
+  const readDays = week.days.filter((day) => day.date <= through && day.minutes >= READING_DAY_MINUTES).length;
+  const total = Math.floor(week.total_minutes);
+  const duration = total < GOLD_RING_MINUTES ? `${n(total)} 分` :
+    `${n(Math.floor(total / GOLD_RING_MINUTES))} 时 ${total % GOLD_RING_MINUTES} 分`;
+  const rings = weekdays.map((day,index) => {
+    const date = offsetDate(start,index);
+    const future = date > through;
+    const minutes = future ? 0 : minutesByDay.get(date) ?? 0;
+    const today = date === through;
+    const label = `周${day} ${shortDate(date)} · ${future ? '未到统计日' : minutesLabel(minutes)}`;
+    return `<button type="button" class="week-day${today ? ' is-today' : ''}" data-week-date="${date}"
+      aria-label="${label}" aria-pressed="${!future && date === selectedWeekDate}"${future ? ' disabled' : ''}>
+      ${dayRing(minutes,today)}<span>${day}</span></button>`;
   }).join('');
-  const meta = monthly ? `${start.getUTCFullYear()} 年 ${start.getUTCMonth() + 1} 月` :
-    `${dayMonth(period.range[0])} – ${dayMonth(period.range[1])}`;
-  return `<section class="panel ${monthly ? 'month' : 'week'}">
-    ${heading(monthly ? '本月' : '本周', `<span>${meta}</span>`)}
-    <p class="summary"><strong>${period.record_days}${monthly ? '' : ' / 7'}</strong><span>天</span>
-      <span>${monthly ? `覆盖率 ${p(period.coverage)}` : `${n(period.total_minutes)} 分钟`}</span></p>
-    <div class="calendar" aria-label="${monthly ? '本月共读日历' : '本周共读记录'}">
-      ${headers}${'<span aria-hidden="true"></span>'.repeat(offset)}${cells}</div>
-    ${comparison(period, period.prev_same_period, monthly ? '上月同期' : '上周同期', monthly)}
-    ${monthly ? legend() : ''}
+  return `<section class="panel week" data-rings="week">
+    ${heading('本周进度',`<span>${dayMonth(first)} – ${dayMonth(last)}</span>`)}
+    <div class="week-progress">
+      <div>${readingRing(week.total_minutes / WEEK_GOAL_MINUTES,`<b>${duration}</b><small>本周时长</small>`)}
+        <p>目标 ${WEEK_GOAL_MINUTES} 分钟（3.5 小时）</p></div>
+      <div>${readingRing(readDays / weekdays.length,`<b>${readDays}/${weekdays.length} 天</b><small>阅读日</small>`)}
+        <p>一天读满 ${READING_DAY_MINUTES} 分钟算一天</p></div>
+    </div>
+    ${first === through && !week.total_minutes ? '<p class="week-start">这周从今天开始</p>' : ''}
+    <div class="week-rhythm">
+      <div class="heading"><h3>本周节奏</h3><span>勾 ${READING_DAY_MINUTES} 分钟 · 蓝环 ${BLUE_RING_MINUTES} 分钟 · 金环 1 小时</span></div>
+      <div class="week-days">${rings}</div>
+      <p class="reading-detail week-detail" role="status" hidden></p>
+    </div>
+    ${comparison(week,week.prev_same_period,'上周同期')}
   </section>`;
 }
 
-function renderWeek(live, content) {
-  return calendar(live, false);
+function renderMonth(live) {
+  const {month, data_through: through} = live;
+  const [first,last] = month.range;
+  const days = new Map(month.calendar.map((day) => [day.date,day]));
+  const start = dateValue(first);
+  const count = dateValue(last).getUTCDate();
+  const offset = (start.getUTCDay() + 6) % 7;
+  if (selectedMonthDate && (selectedMonthDate < first || selectedMonthDate > through)) selectedMonthDate = null;
+  const selection = selectedMonthDate ?? through;
+  const headers = weekdays.map((day) => `<span class="week-head">${day}</span>`).join('');
+  const cells = Array.from({length:count},(_,index) => {
+    const date = offsetDate(start,index);
+    const day = days.get(date);
+    const future = date > through;
+    const label = `${shortDate(date)} · ${weekdayLabel(date)} · ${future ? '未到统计日' : minutesLabel(day?.minutes ?? 0)}`;
+    return `<button type="button" class="day ${future ? 'future' : `level-${day?.level ?? 0}`}" data-month-date="${date}"
+      aria-label="${label}" aria-pressed="${date === selection}"${future ? ' disabled' : ''}>${index + 1}</button>`;
+  }).join('');
+  return `<section class="panel month">
+    ${heading('本月',`<span>${start.getUTCFullYear()} 年 ${start.getUTCMonth() + 1} 月</span>`)}
+    <p class="summary"><strong>${month.record_days}</strong><span>天</span><span>覆盖率 ${p(month.coverage)}</span></p>
+    <div class="calendar" aria-label="本月共读日历">
+      ${headers}${'<span aria-hidden="true"></span>'.repeat(offset)}${cells}</div>
+    <p class="reading-detail month-detail" role="status"></p>
+    ${comparison(month,month.prev_same_period,'上月同期',true)}
+    ${legend()}
+  </section>`;
 }
-function renderMonth(live, content) {
-  return calendar(live, true);
+
+function paintReadingDetail(section, button) {
+  const detail = section.querySelector('.reading-detail');
+  detail.textContent = button?.getAttribute('aria-label') ?? '';
+  detail.hidden = !button;
+}
+function selectReadingDay(section, button) {
+  section.querySelector('[aria-pressed="true"]')?.setAttribute('aria-pressed','false');
+  button?.setAttribute('aria-pressed','true');
+  paintReadingDetail(section,button);
 }
 function renderYears(live, content) {
   const latestByYear = new Map();
@@ -375,7 +467,7 @@ function renderYears(live, content) {
   const current = live.data_through.slice(0,4);
   return `<section class="panel annual">${heading('每年共读','<span>小时</span>')}
     <div class="annual-chart">${years.map(({year,total}) => `<div class="year-col ${year === current ? 'current-year' : ''}">
-      <div class="year-track"><div class="year-fill ${total === 0 ? 'zero-year' : ''}" style="height:${total / max * 100}%"><b>${n(total)}</b></div></div>
+      <div class="year-track"><div class="year-fill ${total === 0 ? 'zero-year' : ''}" style="height:${total / max * 100}%"><b>${n(Math.floor(total))}</b></div></div>
       <span>${esc(year)}</span></div>`).join('')}</div></section>`;
 }
 function conversionNumber(value) {
@@ -471,7 +563,7 @@ function renderFooter(live, content) {
   const stamp = fetched ? updatedLabel(fetched) : '';
   return `<footer class="footer">${content.site.footer_note ? `<p>${esc(content.site.footer_note)}</p>` : ''}
     数据更新于 ${stamp ? dateHTML(fetched,stamp) : '待同步'}
-    <span>${live ? `统计截至 ${dateHTML(live.data_through)} · ` : ''}<a class="version-link" href="#diary">v0.1</a></span>
+    <span>${live ? `统计截至 ${dateHTML(live.data_through)} · ` : ''}<a class="version-link" href="#diary">v0.1.1</a></span>
     ${analyticsEnabled ? '<span>本站使用无 Cookie 的匿名访问统计</span>' : ''}</footer>`;
 }
 
@@ -753,6 +845,7 @@ function render({background = false} = {}) {
   }
   avatarVisit = entry?.hours ?? null;
   photoObserver?.disconnect();
+  ringObserver?.disconnect();
   clearTimeout(backTimer);
   delete shell.dataset.photoLang;
   const previousRoute = shell.dataset.route;
@@ -774,10 +867,14 @@ function render({background = false} = {}) {
       shell.innerHTML = renderAchievementPage(live,content);
     }
   } else {
-    shell.innerHTML = `${renderHeader(live,content)}<main>${homeBlocks.map((block) => block(live,content)).join('')}</main>${renderFooter(live,content)}`;
+    shell.innerHTML = `${renderHeader(live,content)}${ringGradient}<main>${homeBlocks.map((block) => block(live,content)).join('')}</main>${renderFooter(live,content)}`;
     drawHeatmap(live);
     playBeanRoad();
     paintSyncControls();
+    for (const section of shell.querySelectorAll('.week, .month')) {
+      paintReadingDetail(section,section.querySelector('[aria-pressed="true"]'));
+    }
+    animateReadingRings();
   }
   if (previousRoute !== shell.dataset.route) window.scrollTo(0,current.subpage ? 0 : homeScroll);
 }
@@ -808,6 +905,12 @@ shell.addEventListener('error', (event) => {
   }
 }, true);
 shell.addEventListener('click', (event) => {
+  const dateButton = event.target.closest('button[data-month-date]:not(:disabled)');
+  if (dateButton) {
+    selectedMonthDate = dateButton.dataset.monthDate;
+    selectReadingDay(dateButton.closest('.month'),dateButton);
+    return;
+  }
   if (event.target.closest('.sync-button')) {
     void syncToday();
     return;
@@ -843,6 +946,15 @@ shell.addEventListener('click', (event) => {
   } else if (link && /^#(?:achievements|about|diary)/.test(link.hash) && shell.dataset.page === 'home') {
     homeScroll = window.scrollY;
   }
+});
+document.addEventListener('click', (event) => {
+  const week = shell.querySelector('.week');
+  if (!week) return;
+  const button = event.target.closest('button[data-week-date]:not(:disabled)');
+  const next = button?.dataset.weekDate ?? null;
+  if (!next && !selectedWeekDate) return;
+  selectedWeekDate = next === selectedWeekDate ? null : next;
+  selectReadingDay(week,selectedWeekDate ? button : null);
 });
 window.addEventListener('hashchange', render);
 window.addEventListener('popstate', render);
