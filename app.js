@@ -55,7 +55,7 @@ const legend = () => `<div class="legend">${levels.map((label, i) =>
   `<span><i class="level-${i}" aria-hidden="true"></i>${esc(label)}</span>`).join('')}</div>`;
 const achievementURL = (value) => `#achievements${value ? `/${value}` : ''}`;
 
-let state = {live:null, content:fallback, offline:false, preview:null, theme:null};
+let state = {live:null, content:fallback, memories:{}, offline:false, preview:null, theme:null};
 let avatarVisit = null;
 let photoSet = null;
 let avatarSwap = false;
@@ -74,6 +74,7 @@ let analyticsEnabled = false;
 const analyticsOptOutKey = 'coreading:analytics-opt-out';
 history.scrollRestoration = 'manual';
 let photoObserver, backTimer, gesture;
+let postcardURL;
 
 function analyticsAllowed() {
   const address = new URL(location.href);
@@ -280,9 +281,10 @@ async function syncToday() {
   paintSyncControls();
   try {
     const previous = state.live?.fetched_at;
-    const response = await loadLive(Date.now());
+    const [response, memories] = await Promise.all([loadLive(Date.now()), loadMemories()]);
     if (response.cached || !navigator.onLine) throw new Error('Offline');
     state.live = response.data;
+    state.memories = memories;
     state.offline = false;
     syncStatus = response.data.fetched_at !== previous ? 'updated' : 'unchanged';
   } catch {
@@ -504,15 +506,19 @@ function medal(entry, unit = entry.dayBased ? '天' : '小时') {
   const type = entry.locked ? 'locked' : entry.value % (entry.dayBased ? 500 : 100) === 0 ? 'major' : 'minor';
   return `<span class="medal ${type}" aria-hidden="true"><span class="medal-star">✦</span><strong>${n(entry.value)}</strong><small>${esc(unit)}</small></span>`;
 }
+const memoryKey = (entry) => `${entry.value}${entry.dayBased ? 'd' : 'h'}`;
+const memoryPhoto = (entry) => entry?.date ? state.memories[memoryKey(entry)]?.photo : null;
+
 function renderMedals(entries, content, strip = false) {
   return `<div class="${strip ? 'achievement-strip' : 'medals'}"${strip ? ` data-scroll-key="medals-${entries[0].dayBased ? 'days' : 'hours'}"` : ''}>${entries.map((entry) => {
     const copy = resolve(content,entry.value,entry.dayBased);
     const longDate = entry.date?.replace(/^(\d+)-(\d+)-(\d+)$/,(_,year,month,day) => `${year} 年 ${Number(month)} 月 ${Number(day)} 日`);
     const status = entry.date ? dateHTML(entry.date,longDate) : entry.preview ? '<span class="preview-label">预演</span>' :
       `下一站 · 还差 ${entry.dayBased ? `${entry.left} 个共读日` : hours(entry.left)}${entry.eta ? `<br>预计 ${dateHTML(entry.eta,dayMonth(entry.eta))}` : ''}`;
+    const photo = memoryPhoto(entry);
     return `<a class="achievement ${entry.locked ? 'is-locked' : 'is-reached'}" data-achievement="${entry.id}" href="${achievementURL(entry.id)}">
       ${medal(entry)}<b>${esc(copy.badge || `第 ${entry.value} ${entry.dayBased ? '天' : '小时'}`)}</b><span>${status}</span>
-      <span class="memory-slot" aria-hidden="true"></span></a>`;
+      <span class="memory-slot" aria-hidden="true">${photo ? `<img src="${esc(photo)}" alt="" loading="lazy">` : ''}</span></a>`;
   }).join('')}</div>`;
 }
 function renderAchievementBlock(live, content) {
@@ -629,7 +635,7 @@ function renderFooter(live, content) {
   const stamp = fetched ? updatedLabel(fetched) : '';
   return `<footer class="footer">${content.site.footer_note ? `<p>${esc(content.site.footer_note)}</p>` : ''}
     数据更新于 ${stamp ? dateHTML(fetched,stamp) : '待同步'}
-    <span>${live ? `统计截至 ${dateHTML(live.data_through)} · ` : ''}<a class="version-link" href="#changelog">v0.1.3</a></span>
+    <span>${live ? `统计截至 ${dateHTML(live.data_through)} · ` : ''}<a class="version-link" href="#changelog">v0.2</a></span>
     ${analyticsEnabled ? '<span>本站使用无 Cookie 的匿名访问统计</span>' : ''}</footer>`;
 }
 
@@ -879,6 +885,137 @@ function renderCelebrationPage(live, content, entry, lang) {
   </main>`;
 }
 
+function postcardMessage(content, entry) {
+  const {value,dayBased} = entry;
+  const own = (dayBased ? content.day_milestones : content.milestones)?.[value]?.message;
+  if (own) return own;
+  const major = value % (dayBased ? 500 : 100) === 0;
+  const pool = content.memory_messages?.[major ? 'thanks' : 'encourage'];
+  if (!pool?.length) return '';
+  const sum = new TextEncoder().encode(memoryKey(entry)).reduce((total, byte) => total + byte, 0);
+  return pool[sum % pool.length].replaceAll('{n}',String(value)).replaceAll('{unit}',dayBased ? '天' : '小时');
+}
+
+function postcardLines(ctx, text, width) {
+  const lines = [];
+  let line = '';
+  for (const char of text) {
+    if (char === '\n' || (line && ctx.measureText(line + char).width > width)) {
+      lines.push(line.trimEnd());
+      line = '';
+    }
+    if (char !== '\n') line += char;
+  }
+  if (line) lines.push(line.trimEnd());
+  return lines;
+}
+
+async function postcardImage(source, entry, message, signature) {
+  const image = new Image();
+  image.src = source;
+  const style = getComputedStyle(document.documentElement);
+  const token = (key) => style.getPropertyValue('--ds-' + key).trim();
+  const font = style.getPropertyValue('--ds-font').trim();
+  await Promise.all([image.decode(), document.fonts.load(`950 130px ${font}`).catch(() => {})]);
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1440;
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const photoHeight = 864;
+  ctx.fillStyle = token('surface');
+  ctx.fillRect(0,0,width,canvas.height);
+  const scale = Math.max(width / image.naturalWidth, photoHeight / image.naturalHeight);
+  const cropWidth = width / scale;
+  const cropHeight = photoHeight / scale;
+  ctx.drawImage(image,(image.naturalWidth-cropWidth)/2,(image.naturalHeight-cropHeight)/2,
+    cropWidth,cropHeight,0,0,width,photoHeight);
+
+  const left = 78;
+  const textWidth = width - 2 * left;
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = token('photo-number');
+  ctx.font = `950 130px ${font}`;
+  const value = n(entry.value);
+  const valueLeft = left + (entry.dayBased ? 65 : 0);
+  const valueWidth = ctx.measureText(value).width;
+  ctx.fillText(value,valueLeft,1000,textWidth-160);
+  ctx.font = `800 52px ${font}`;
+  if (entry.dayBased) ctx.fillText('第',left,1016);
+  ctx.fillText(entry.dayBased ? '天' : '小时',valueLeft+Math.min(valueWidth,textWidth-160)+22,1016);
+  ctx.fillStyle = token('text-strong');
+  let size = 42;
+  let lines;
+  do {
+    ctx.font = `600 ${size}px ${font}`;
+    lines = postcardLines(ctx,message,textWidth);
+    size -= 2;
+  } while (lines.length > 3 && size >= 28);
+  if (lines.length > 3) {
+    const last = Array.from(lines[2]);
+    while (last.length && ctx.measureText(last.join('') + '…').width > textWidth) last.pop();
+    lines = [lines[0],lines[1],last.join('') + '…'];
+  }
+  lines.forEach((line,i) => ctx.fillText(line,left,1120+i*53));
+  ctx.fillStyle = token('text');
+  ctx.font = `500 33px ${font}`;
+  ctx.fillText(`到站于 ${entry.date}`,left,1315);
+  ctx.fillStyle = token('text-muted');
+  ctx.font = `500 28px ${font}`;
+  ctx.fillText(signature,left,1377,textWidth);
+  return new Promise((resolve,reject) => canvas.toBlob((blob) => {
+    if (blob) resolve(blob);
+    else reject(new Error('Postcard unavailable'));
+  },'image/png'));
+}
+
+function mountPhotoMode(live, content, entry, lang) {
+  shell.dataset.photoLang = lang;
+  shell.innerHTML = renderCelebrationPage(live,content,entry,lang);
+  paintMotionState();
+  watchPhotoStars();
+}
+
+async function mountPostcard(live, content, entry, lang, source, message, signature, key) {
+  const label = entry.dayBased ? `第 ${n(entry.value)} 天` : `${n(entry.value)} 小时`;
+  shell.innerHTML = `${backBar('<a href="#achievements">全部成就</a>')}<main class="postcard">
+    <p class="postcard-loading" role="status">正在生成明信片…</p>
+    <img class="postcard-image" width="1080" height="1440" alt="${esc(`${label}纪念明信片 · ${message} · ${entry.date}`)}" hidden>
+    <div class="postcard-actions" hidden>
+      <button type="button" class="postcard-share" hidden>分享</button>
+      <a class="postcard-save">保存图片</a>
+    </div>
+    <p class="postcard-hint" hidden>长按上面的图片存到相册</p>
+    <a class="postcard-mode" href="${achievementURL(entry.id)}?photo=1">拍照模式</a>
+  </main>`;
+  const panel = shell.querySelector('.postcard');
+  panel.dataset.key = key;
+  try {
+    const blob = await postcardImage(source,entry,message,signature);
+    if (!panel.isConnected) return;
+    postcardURL = URL.createObjectURL(blob);
+    const preview = panel.querySelector('.postcard-image');
+    const save = panel.querySelector('.postcard-save');
+    const share = panel.querySelector('.postcard-share');
+    const filename = `coreading-${memoryKey(entry)}.png`;
+    preview.src = postcardURL;
+    save.href = postcardURL;
+    save.download = filename;
+    const file = new File([blob],filename,{type:'image/png'});
+    const files = [file];
+    if (navigator.share && navigator.canShare?.({files})) {
+      share.hidden = false;
+      share.addEventListener('click',() => navigator.share({files}).catch(() => {}));
+    }
+    panel.querySelector('.postcard-loading').remove();
+    preview.hidden = false;
+    panel.querySelector('.postcard-actions').hidden = false;
+    panel.querySelector('.postcard-hint').hidden = !/iPhone|iPad|iPod/.test(navigator.userAgent);
+  } catch {
+    if (panel.isConnected) mountPhotoMode(live,content,entry,lang);
+  }
+}
+
 function watchPhotoStars() {
   const card = shell.querySelector('.celebration');
   const sky = card.querySelector('.stars');
@@ -962,16 +1099,26 @@ function route() {
   const page = path === 'about' || path === 'changelog' ? path : null;
   const match = path.match(/^achievements(?:\/(d?\d+))?$/);
   const achievement = match?.[1] ?? (match || page ? null : preview);
-  return {preview, lang, page, achievement, subpage:Boolean(page || match || achievement)};
+  return {preview, lang, page, achievement, photoMode:hashSearch.get('photo') === '1',
+    subpage:Boolean(page || match || achievement)};
 }
 function render({background = false} = {}) {
   const {live,content} = state;
   const current = route();
-  if (background && shell.querySelector('.celebration') &&
-      shell.dataset.route === String(current.achievement) && shell.dataset.photoLang === current.lang) return;
   state.preview = current.preview;
   const entry = live && current.subpage
     ? achievementEntries(live,Boolean(current.achievement?.startsWith('d'))).find((item) => item.id === current.achievement) : null;
+  const photo = !current.photoMode && memoryPhoto(entry);
+  const message = photo ? postcardMessage(content,entry) : '';
+  const signature = content.site.share_signature ?? '';
+  const postcardKey = photo && JSON.stringify([photo,entry.date,message,signature,document.documentElement.dataset.theme]);
+  if (background && (postcardKey ? shell.querySelector('.postcard')?.dataset.key === postcardKey :
+    shell.querySelector('.celebration') && shell.dataset.route === String(current.achievement) &&
+    shell.dataset.photoLang === current.lang)) return;
+  if (postcardURL) {
+    URL.revokeObjectURL(postcardURL);
+    postcardURL = undefined;
+  }
   if (entry && (entry.id !== avatarVisit || !content.family?.sets.some((set) => set.id === photoSet))) {
     const warmGroup = !photoSet && content.family?.sets.find((set) => set.id === readerFamily?.group);
     photoSet = (warmGroup || chooseFamilySet())?.id ?? null;
@@ -997,10 +1144,8 @@ function render({background = false} = {}) {
     shell.innerHTML = `${renderHeader(live,content)}<main><p class="panel notice" role="status">暂时无法读取共读数据，请联网后重试。</p></main>${renderFooter(live,content)}`;
   } else if (current.subpage) {
     if (entry) {
-      shell.dataset.photoLang = current.lang;
-      shell.innerHTML = renderCelebrationPage(live,content,entry,current.lang);
-      paintMotionState();
-      watchPhotoStars();
+      if (photo) void mountPostcard(live,content,entry,current.lang,photo,message,signature,postcardKey);
+      else mountPhotoMode(live,content,entry,current.lang);
     } else {
       shell.innerHTML = renderAchievementPage(live,content);
     }
@@ -1116,6 +1261,18 @@ const validLive = (data) => data?.schema_version === 1 && data.today && data.lif
   data.next && data.week && data.month && data.modules && data.levels_by_year &&
   Array.isArray(data.roadmap) && Array.isArray(data.milestones_reached) && Array.isArray(data.cumulative_by_month);
 
+async function loadMemories() {
+  try {
+    const {data} = await jsonResource('./memories.json',
+      (index) => index && typeof index === 'object' && !Array.isArray(index));
+    return Object.fromEntries(Object.entries(data).filter(([key, entry]) =>
+      /^[1-9]\d*[hd]$/.test(key) &&
+      new RegExp(`^memories/${key}\\.jpg\\?v=[a-f0-9]{8}$`).test(entry?.photo)));
+  } catch {
+    return {};
+  }
+}
+
 async function loadLive(stamp) {
   const suffix = stamp === undefined ? '' : `?t=${stamp}`;
   try {
@@ -1154,11 +1311,12 @@ async function update() {
   if (syncInFlight) return;
   lastReadAt = Date.now();
   const id = ++requestId;
-  const [live,content,registry] = await Promise.allSettled([
+  const [live,content,registry,memories] = await Promise.allSettled([
     loadLive(),jsonResource('./content.json',validContent),
-    jsonResource('./themes/registry.json',(data) => Array.isArray(data?.themes)),
+    jsonResource('./themes/registry.json',(data) => Array.isArray(data?.themes)),loadMemories(),
   ]);
   if (id !== requestId) return;
+  if (memories.status === 'fulfilled') state.memories = memories.value;
   if (live.status === 'fulfilled') state.live = live.value.data;
   if (content.status === 'fulfilled') {
     state.content = {...content.value.data,site:{...fallback.site,...content.value.data.site}};

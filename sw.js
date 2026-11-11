@@ -1,10 +1,13 @@
 const scope = self.registration.scope;
 const prefix = `coreading:${scope}:`;
-const shellCache = prefix + 'shell-v01-r20';
+const shellCache = prefix + 'shell-v01-r21';
 const dataCache = prefix + 'live-v1';
 const avatarCache = prefix + 'family-v1';
+const memoryCache = prefix + 'memories-v1';
 const url = (path) => new URL(path,scope).href;
 const avatarPrefix = url('./family/');
+const memoryPrefix = url('./memories/');
+const memoryIndex = url('./memories.json');
 const legacyAvatarPrefix = url('./assets/celebration-avatars/');
 const shell = new Set([
   './','./index.html','./style.css','./app.js',
@@ -25,7 +28,7 @@ self.addEventListener('activate',(event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.filter((key) => key.startsWith(prefix) &&
-      key !== shellCache && key !== dataCache && key !== avatarCache).map((key) => caches.delete(key)));
+      ![shellCache,dataCache,avatarCache,memoryCache].includes(key)).map((key) => caches.delete(key)));
     const data = await caches.open(dataCache);
     const oldAvatars = (await data.keys()).filter((request) => request.url.startsWith(legacyAvatarPrefix) ||
       request.url === url('./assets/family.png') || request.url === url('./assets/reader.png'));
@@ -46,7 +49,7 @@ async function networkFirst(request, cacheName = dataCache) {
   if (cacheName === avatarCache) address.searchParams.delete('retry');
   const key = liveKey(request.url) || address.href;
   const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(),cacheName === avatarCache ? 12000 : 4500);
+  const timer = setTimeout(() => abort.abort(),[avatarCache,memoryCache].includes(cacheName) ? 12000 : 4500);
   try {
     const response = await fetch(request,{cache:'no-store',signal:abort.signal});
     if (!response.ok) throw new Error('Resource unavailable');
@@ -90,7 +93,9 @@ self.addEventListener('fetch',(event) => {
       }
       return networkFirst(event.request,avatarCache);
     })());
-  } else if (liveKey(address.href) || address.href === copy ||
+  } else if (address.href.startsWith(memoryPrefix)) {
+    event.respondWith(networkFirst(event.request,memoryCache));
+  } else if (liveKey(address.href) || address.href === copy || address.href === memoryIndex ||
     /^(themes\/|assets\/|manifest\.webmanifest$)/.test(address.href.slice(scope.length))) {
     event.respondWith(networkFirst(event.request));
   }
