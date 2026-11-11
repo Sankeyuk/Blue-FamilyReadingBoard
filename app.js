@@ -41,7 +41,15 @@ const shortDate = (value) => `${Number(value.slice(5,7))} 月 ${Number(value.sli
 const minutesLabel = (value) => `${n(Math.floor(value))} 分钟`;
 const weekdayLabel = (date) => `周${weekdays[(dateValue(date).getUTCDay() + 6) % 7]}`;
 const offsetDate = (start, offset) => new Date(start.getTime() + offset * 86400000).toISOString().slice(0,10);
+const weekReadingDays = (live) => live.week.days
+  .filter(day => day.date <= live.data_through && day.minutes >= READING_DAY_MINUTES).length;
 const dateHTML = (value, label = value) => `<time datetime="${esc(value)}">${esc(label)}</time>`;
+function readingStart(live) {
+  const date = live.lifetime.first_record;
+  if (!date) return {date:null,dayLabel:'—'};
+  const elapsed = Math.round((dateValue(live.data_through) - dateValue(date)) / 86400000) + 1;
+  return {date,dayLabel:`第 ${n(elapsed)} 天`};
+}
 const heading = (title, meta = '') => `<div class="heading"><h2>${title}</h2>${meta}</div>`;
 const legend = () => `<div class="legend">${levels.map((label, i) =>
   `<span><i class="level-${i}" aria-hidden="true"></i>${esc(label)}</span>`).join('')}</div>`;
@@ -60,7 +68,6 @@ let readerFamily;
 let familyWarmup = false;
 const warmedFaces = new Set();
 const recentFamilyKey = 'coreading:last-reader-family';
-let headerFamilyFailed = false;
 let readerFaceFailed = false;
 let roadPlayed = false;
 let analyticsEnabled = false;
@@ -117,26 +124,20 @@ function chooseReaderFamily(family) {
   const [reader] = faces.splice(blue < 0 ? 1 : blue,1);
   return {group:group.id,faces:[faces[0],reader,faces[1]],reader};
 }
-const bookArt = (star = false) => `<svg viewBox="0 0 24 24" aria-hidden="true">
-  <path class="book-line" d="M12 20c-2.2-2-5-3-9-3V8c4 0 6.8 1 9 3 2.2-2 5-3 9-3v9c-4 0-6.8 1-9 3Zm0 0v-9"/>
-  ${star ? '<path class="book-star" d="M12 1l1.25 3.75L17 6l-3.75 1.25L12 11l-1.25-3.75L7 6l3.75-1.25Z"/>' : ''}</svg>`;
 function readerPortrait() {
   const reader = readerFamily?.reader;
   return reader && !readerFaceFailed
     ? `<img class="reader-portrait" data-reader-face src="${esc(faceURL(reader.path))}" alt="">`
     : '';
 }
+function pageLinks(current = '') {
+  return `<span class="page-links"><a href="#about"${current === 'about' ? ' aria-current="page"' : ''}>关于</a>
+    <span aria-hidden="true">·</span><a href="#changelog"${current === 'changelog' ? ' aria-current="page"' : ''}>更新</a></span>`;
+}
 function renderHeader(live, content) {
-  const portraits = readerFamily && !headerFamilyFailed ? readerFamily.faces.map((face) =>
-    `<img class="reader-portrait" data-header-face src="${esc(faceURL(face.path))}" alt="${esc(face.name)}">`).join('') : '';
-  const badge = portraits ? `<div class="header-badge"><span class="header-family">${portraits}</span><span class="badge-book">${bookArt()}</span>
-    <svg class="badge-arc" viewBox="0 0 104 64" aria-hidden="true">
-      <circle cx="10" cy="19" r="1.5"/><circle cx="27" cy="10" r="1.7"/><circle class="arc-gold" cx="47" cy="4" r="2.5"/><circle cx="66" cy="8" r="1.8"/><circle cx="84" cy="16" r="1.5"/>
-    </svg></div>` : '<div class="header-badge"><img class="mark" src="./assets/icon-192.png" width="52" height="52" alt=""></div>';
-  return `<header class="mast"><div class="identity">${badge}
-    <div><p class="eyebrow">${esc(content.site.subtitle)}</p><h1>${esc(content.site.name)}</h1></div></div>
-    <div class="identity mast-actions">${state.offline ? '<span class="pill" role="status">离线</span>' : ''}
-    <a class="about-icon" href="#about" aria-label="缘起">${bookArt(true)}</a></div></header>`;
+  return `<header class="mast"><nav aria-label="看板页面">${pageLinks()}</nav>
+    <div class="mast-brand"><p class="eyebrow">${esc(content.site.subtitle)}</p><h1>${esc(content.site.name)}</h1></div>
+    <div class="mast-status">${state.offline ? '<span class="pill" role="status">离线</span>' : ''}</div></header>`;
 }
 function renderArrival(live, content) {
   const milestone = live.celebrate;
@@ -177,8 +178,7 @@ function renderStars(total, photo = false) {
 }
 function renderGalaxy(live, content) {
   const {lifetime, streak} = live;
-  const first = lifetime.first_record;
-  const elapsed = first ? Math.round((dateValue(live.data_through) - dateValue(first)) / 86400000) + 1 : 0;
+  const {date:first, dayLabel} = readingStart(live);
   const longest = streak.longest;
   const streakChip = streak.current >= 1
     ? `<span>连续共读</span><strong>${n(streak.current)} 天</strong>`
@@ -191,7 +191,7 @@ function renderGalaxy(live, content) {
       <p>${esc(content.site.galaxy_tagline)}</p></div>
       <div class="galaxy-number"><strong>${n(lifetime.total_hours)}</strong> <span>时</span></div>
       <div class="hero-chips">
-        <div><span aria-hidden="true">◈</span><span>开始共读 ${first ? dateHTML(first) : '待记录'}</span><strong>${first ? `第 ${n(elapsed)} 天` : '—'}</strong></div>
+        <div><span aria-hidden="true">◈</span><span>开始共读 ${first ? dateHTML(first) : '待记录'}</span><strong>${dayLabel}</strong></div>
         <div><span aria-hidden="true">✦</span>${streakChip}</div>
       </div>
     </div></section>`;
@@ -204,7 +204,10 @@ let nextSyncAt = 0;
 let lastReadAt = 0;
 let syncLabelTimer;
 let selectedWeekDate = null;
-let selectedMonthDate = null;
+let heatmapYear = null;
+let heatmapDate = null;
+let heatmapBubble = false;
+const homeScrollPositions = new Map();
 let ringObserver;
 const animatedRingSections = new Set();
 
@@ -383,7 +386,7 @@ function renderWeek(live) {
   const [first,last] = week.range;
   const start = dateValue(first);
   const minutesByDay = new Map(week.days.map((day) => [day.date,day.minutes]));
-  const readDays = week.days.filter((day) => day.date <= through && day.minutes >= READING_DAY_MINUTES).length;
+  const readDays = weekReadingDays(live);
   const total = Math.floor(week.total_minutes);
   const duration = total < GOLD_RING_MINUTES ? `${n(total)} 分` :
     `${n(Math.floor(total / GOLD_RING_MINUTES))} 时 ${total % GOLD_RING_MINUTES} 分`;
@@ -412,35 +415,6 @@ function renderWeek(live) {
       <p class="reading-detail week-detail" role="status" hidden></p>
     </div>
     ${comparison(week,week.prev_same_period,'上周同期')}
-  </section>`;
-}
-
-function renderMonth(live) {
-  const {month, data_through: through} = live;
-  const [first,last] = month.range;
-  const days = new Map(month.calendar.map((day) => [day.date,day]));
-  const start = dateValue(first);
-  const count = dateValue(last).getUTCDate();
-  const offset = (start.getUTCDay() + 6) % 7;
-  if (selectedMonthDate && (selectedMonthDate < first || selectedMonthDate > through)) selectedMonthDate = null;
-  const selection = selectedMonthDate ?? through;
-  const headers = weekdays.map((day) => `<span class="week-head">${day}</span>`).join('');
-  const cells = Array.from({length:count},(_,index) => {
-    const date = offsetDate(start,index);
-    const day = days.get(date);
-    const future = date > through;
-    const label = `${shortDate(date)} · ${weekdayLabel(date)} · ${future ? '未到统计日' : minutesLabel(day?.minutes ?? 0)}`;
-    return `<button type="button" class="day ${future ? 'future' : `level-${day?.level ?? 0}`}" data-month-date="${date}"
-      aria-label="${label}" aria-pressed="${date === selection}"${future ? ' disabled' : ''}>${index + 1}</button>`;
-  }).join('');
-  return `<section class="panel month">
-    ${heading('本月',`<span>${start.getUTCFullYear()} 年 ${start.getUTCMonth() + 1} 月</span>`)}
-    <p class="summary"><strong>${month.record_days}</strong><span>天</span><span>覆盖率 ${p(month.coverage)}</span></p>
-    <div class="calendar" aria-label="本月共读日历">
-      ${headers}${'<span aria-hidden="true"></span>'.repeat(offset)}${cells}</div>
-    <p class="reading-detail month-detail" role="status"></p>
-    ${comparison(month,month.prev_same_period,'上月同期',true)}
-    ${legend()}
   </section>`;
 }
 
@@ -493,63 +467,155 @@ function renderConversions(live, content) {
     }).join('')}</section>`;
 }
 
-function resolve(content, value) {
-  const base = content.defaults[value % 100 === 0 ? 'major' : 'minor'];
-  const own = content.milestones[value];
+function resolve(content, value, dayBased = false) {
+  const defaults = dayBased ? content.day_defaults : content.defaults;
+  const overrides = dayBased ? content.day_milestones : content.milestones;
+  const base = defaults?.[value % (dayBased ? 500 : 100) === 0 ? 'major' : 'minor'];
+  const own = overrides?.[value];
   return Object.fromEntries(['badge','celebration','message'].map((key) =>
-    [key, (own?.[key] || base?.[key] || '').replaceAll('{hours}', String(value))]));
+    [key, (own?.[key] || base?.[key] || '').replaceAll(dayBased ? '{days}' : '{hours}', String(value))]));
 }
-function achievementEntries(live) {
-  const entries = new Map(live.milestones_reached.map((milestone) =>
-    [milestone.hours, {hours:milestone.hours, date:milestone.date}]));
-  if (state.preview) {
-    const value = state.preview;
-    entries.set(value, {...entries.get(value), hours:value, preview:true,
-      eta:live.roadmap.find((station) => station.hours === value)?.eta});
+function achievementEntries(live, dayBased = false) {
+  const reached = dayBased ? live.day_milestones_reached ?? [] : live.milestones_reached;
+  const entries = new Map(reached.map((milestone) => {
+    const value = dayBased ? milestone.days : milestone.hours;
+    const id = dayBased ? `d${value}` : String(value);
+    return [id,{id,value,dayBased,date:milestone.date}];
+  }));
+  if (state.preview && state.preview.startsWith('d') === dayBased) {
+    const id = state.preview;
+    const value = Number(dayBased ? id.slice(1) : id);
+    entries.set(id,{...entries.get(id),id,value,dayBased,preview:true,
+      eta:dayBased ? null : live.roadmap.find((station) => station.hours === value)?.eta});
   }
-  const next = live.roadmap.find((station) => !station.reached && !entries.has(station.hours));
-  if (next) {
-    entries.set(next.hours, {hours:next.hours, locked:true, eta:next.eta,
-      left:next.hours === live.next.next_milestone_hours ? live.next.hours_to_milestone :
+  const next = dayBased ? live.next_day : live.roadmap.find((station) =>
+    !station.reached && !entries.has(String(station.hours)));
+  if (next && !entries.has(dayBased ? `d${next.days}` : String(next.hours))) {
+    const value = dayBased ? next.days : next.hours;
+    const id = dayBased ? `d${value}` : String(value);
+    entries.set(id,{id,value,dayBased,locked:true,eta:next.eta,
+      left:dayBased ? next.remaining :
+        next.hours === live.next.next_milestone_hours ? live.next.hours_to_milestone :
         Math.round((next.hours - live.lifetime.total_hours) * 100) / 100});
   }
-  return [...entries.values()].sort((a,b) => a.hours - b.hours);
+  return [...entries.values()].sort((a,b) => a.value - b.value);
 }
-function medal(entry, unit = '小时') {
-  const type = entry.locked ? 'locked' : entry.hours % 100 === 0 ? 'major' : 'minor';
-  return `<span class="medal ${type}" aria-hidden="true"><span class="medal-star">✦</span><strong>${n(entry.hours)}</strong><small>${esc(unit)}</small></span>`;
+function medal(entry, unit = entry.dayBased ? '天' : '小时') {
+  const type = entry.locked ? 'locked' : entry.value % (entry.dayBased ? 500 : 100) === 0 ? 'major' : 'minor';
+  return `<span class="medal ${type}" aria-hidden="true"><span class="medal-star">✦</span><strong>${n(entry.value)}</strong><small>${esc(unit)}</small></span>`;
 }
-function renderMedals(live, content) {
-  return `<div class="medals">${achievementEntries(live).map((entry) => {
-    const copy = resolve(content, entry.hours);
-    const status = entry.date ? dateHTML(entry.date) : entry.preview ? '<span class="preview-label">预演</span>' :
-      `下一站 · 还差 ${hours(entry.left)}${entry.eta ? `<br>预计 ${dateHTML(entry.eta, dayMonth(entry.eta))}` : ''}`;
-    return `<a class="achievement ${entry.locked ? 'is-locked' : 'is-reached'}" data-hours="${entry.hours}" href="${achievementURL(entry.hours)}">
-      ${medal(entry)}<b>${esc(copy.badge)}</b><span>${status}</span></a>`;
+function renderMedals(entries, content, strip = false) {
+  return `<div class="${strip ? 'achievement-strip' : 'medals'}"${strip ? ` data-scroll-key="medals-${entries[0].dayBased ? 'days' : 'hours'}"` : ''}>${entries.map((entry) => {
+    const copy = resolve(content,entry.value,entry.dayBased);
+    const longDate = entry.date?.replace(/^(\d+)-(\d+)-(\d+)$/,(_,year,month,day) => `${year} 年 ${Number(month)} 月 ${Number(day)} 日`);
+    const status = entry.date ? dateHTML(entry.date,longDate) : entry.preview ? '<span class="preview-label">预演</span>' :
+      `下一站 · 还差 ${entry.dayBased ? `${entry.left} 个共读日` : hours(entry.left)}${entry.eta ? `<br>预计 ${dateHTML(entry.eta,dayMonth(entry.eta))}` : ''}`;
+    return `<a class="achievement ${entry.locked ? 'is-locked' : 'is-reached'}" data-achievement="${entry.id}" href="${achievementURL(entry.id)}">
+      ${medal(entry)}<b>${esc(copy.badge || `第 ${entry.value} ${entry.dayBased ? '天' : '小时'}`)}</b><span>${status}</span>
+      <span class="memory-slot" aria-hidden="true"></span></a>`;
   }).join('')}</div>`;
 }
 function renderAchievementBlock(live, content) {
+  const row = (dayBased) => {
+    const entries = achievementEntries(live,dayBased).filter((entry) => entry.date);
+    const next = dayBased ? live.next_day : {days:live.next.next_milestone_hours,remaining:live.next.hours_to_milestone};
+    const summary = dayBased ? `下一枚：${next.days} 天 · 还差 ${next.remaining} 个共读日` :
+      `下一枚：${next.days} 小时 · 还差 ${n(next.remaining)} 小时`;
+    return `<section class="achievement-group" data-kind="${dayBased ? 'days' : 'hours'}">
+      <div class="heading"><h3>${dayBased ? '天数' : '时长'}</h3><p>${summary}</p></div>
+      ${entries.length ? renderMedals(entries,content,true) : ''}</section>`;
+  };
   return `<section class="panel achievement-block">${heading('成就','<a class="text-link" href="#achievements">全部成就 ↗</a>')}
-    ${renderMedals(live,content)}</section>`;
+    ${row(false)}${live.next_day && live.day_milestones_reached ? row(true) : ''}</section>`;
 }
-function renderHeatmap(live, content) {
-  const years = Object.entries(live.levels_by_year).filter(([year]) => year >= firstReadingYear(live));
-  return `<section class="panel heatmap">${heading('多年热力图','<span>一格一天</span>')}
-    <div class="heat-years">${years.map(([year, days]) =>
-      `<div class="heat-row"><span>${esc(year)}</span><canvas width="732" height="16" data-year="${esc(year)}" role="img" aria-label="${esc(year)} 年，${(days.match(/[123]/g) || []).length} 个共读日"></canvas></div>`).join('')}</div>
-    ${legend()}</section>`;
+function renderHeatmap(live) {
+  const {month, data_through: through} = live;
+  const summary = `<p class="heat-month-summary">本月 ${month.record_days} 天 · 覆盖率 ${p(month.coverage)}</p>
+    ${comparison(month,month.prev_same_period,'上月同期',true)}`;
+  if (!live.minutes_by_year || !live.years) {
+    return `<section class="panel heatmap">${heading('共读热力图')}
+      <p class="heat-updating">数据更新中</p>${summary}</section>`;
+  }
+  const availableYears = Object.keys(live.minutes_by_year).sort();
+  if (!availableYears.includes(heatmapYear)) {
+    heatmapYear = through.slice(0,4);
+    heatmapDate = null;
+  }
+  const year = Number(heatmapYear);
+  const minutes = live.minutes_by_year[heatmapYear];
+  const start = dateValue(`${year}-01-01`);
+  const offset = (start.getUTCDay() + 6) % 7;
+  const currentYear = heatmapYear === through.slice(0,4);
+  let selection = heatmapDate;
+  if (!selection || !selection.startsWith(heatmapYear)) {
+    const lastRead = minutes.map((value) => value !== null && value > 0).lastIndexOf(true);
+    selection = currentYear ? through : lastRead >= 0 ? offsetDate(start,lastRead) : null;
+  }
+  const lastDate = currentYear ? dateValue(through) : dateValue(`${year}-12-31`);
+  const lastIndex = Math.round((lastDate - start) / 86400000);
+  const columns = Math.floor((offset + lastIndex) / 7) + 1;
+  const since = dateValue(live.lifetime.since);
+  const levelOffset = Math.max(0, Math.round((since - start) / 86400000));
+  const rows = Array.from({length:columns},(_,column) => {
+    let monthLabel = '';
+    const cells = Array.from({length:7},(_,weekday) => {
+      const index = column * 7 + weekday - offset;
+      if (index < 0 || index >= minutes.length) return '<span class="heat-empty" aria-hidden="true"></span>';
+      const date = offsetDate(start,index);
+      if (date.endsWith('-01')) monthLabel = `${Number(date.slice(5,7))} 月`;
+      const future = date > through;
+      const value = minutes[index];
+      if (!future && value === null) return '<span class="heat-empty" aria-hidden="true"></span>';
+      const level = live.levels_by_year[heatmapYear]?.[index - levelOffset] ?? '0';
+      const label = `${shortDate(date)} · ${weekdayLabel(date)} · ${future ? '未到统计日' : minutesLabel(value)}`;
+      return `<button type="button" class="heat-day ${future ? 'future' : `level-${level}`}${date === through ? 'is-today' : ''}"
+        data-heat-date="${date}" aria-label="${label}" aria-pressed="${date === selection}"${future ? ' disabled' : ''}></button>`;
+    }).join('');
+    return `<div class="heat-week">${monthLabel ? `<span class="heat-month-label">${monthLabel}</span>` : ''}${cells}</div>`;
+  }).join('');
+  const stats = live.years[heatmapYear];
+  return `<section class="panel heatmap">
+    <div class="heading heat-heading"><h2>${year} 年 · 共读热力图</h2>
+      <div class="heat-year-tabs" role="group" aria-label="热力图年份">${availableYears.map((y) =>
+        `<button type="button" data-heat-year="${y}" aria-pressed="${y === heatmapYear}">${y}</button>`).join('')}</div></div>
+    <p class="heat-statistics">共读 ${stats.record_days} 天 · 读满 30 分钟 ${stats.days_30} 天</p>
+    <p class="reading-detail heat-detail" role="status"></p>
+    <div class="heat-frame">
+      <div class="heat-weekdays" aria-hidden="true">${weekdays.map((day,index) => `<span>${index % 2 ? '' : day}</span>`).join('')}</div>
+      <div class="heat-scroll" data-scroll-key="heat-${year}" tabindex="0" aria-label="${year} 年共读热力图，左右滑动查看">${rows}</div>
+      <span class="heat-tooltip" aria-hidden="true" hidden></span>
+    </div>${summary}${legend()}</section>`;
 }
-function drawHeatmap(live) {
-  const style = getComputedStyle(document.documentElement);
-  const palette = levels.map((_, index) => style.getPropertyValue(`--ds-level-${index}`).trim());
-  const since = dateValue(live.lifetime.since).getTime();
-  for (const canvas of shell.querySelectorAll('.heat-row canvas')) {
-    const offset = Math.max(0, Math.round((since - Date.UTC(Number(canvas.dataset.year),0,1)) / 86400000));
-    const ctx = canvas.getContext('2d');
-    [...live.levels_by_year[canvas.dataset.year]].forEach((level,i) => {
-      ctx.fillStyle = palette[Number(level)];
-      ctx.fillRect((i + offset) * 2,0,2,canvas.height);
-    });
+function positionHeatTooltip() {
+  const frame = shell.querySelector('.heat-frame');
+  if (!frame) return;
+  const selected = frame.querySelector('[aria-pressed="true"]');
+  const bubble = frame.querySelector('.heat-tooltip');
+  const viewport = frame.querySelector('.heat-scroll').getBoundingClientRect();
+  const rect = selected?.getBoundingClientRect();
+  bubble.hidden = !heatmapBubble || !rect || rect.right < viewport.left || rect.left > viewport.right;
+  if (bubble.hidden) return;
+  bubble.textContent = selected.getAttribute('aria-label');
+  const bounds = frame.getBoundingClientRect();
+  bubble.style.left = `${Math.max(0,Math.min(bounds.width - bubble.offsetWidth,rect.left - bounds.left + rect.width / 2 - bubble.offsetWidth / 2))}px`;
+  bubble.style.top = `${rect.top - bounds.top - bubble.offsetHeight - 5}px`;
+}
+function restoreHomeScroll() {
+  for (const strip of shell.querySelectorAll('[data-scroll-key]')) {
+    const saved = homeScrollPositions.get(strip.dataset.scrollKey);
+    if (saved) {
+      strip.scrollLeft = saved.end ? strip.scrollWidth : saved.left;
+    } else {
+      const selected = strip.querySelector('[aria-pressed="true"]');
+      strip.scrollLeft = selected ? selected.getBoundingClientRect().right - strip.getBoundingClientRect().left +
+        strip.scrollLeft - strip.clientWidth : strip.scrollWidth;
+    }
+  }
+  const heatmap = shell.querySelector('.heatmap');
+  if (heatmap?.querySelector('.heat-detail')) {
+    paintReadingDetail(heatmap,heatmap.querySelector('[aria-pressed="true"][data-heat-date]'));
+    heatmap.querySelector('.heat-scroll').addEventListener('scroll',positionHeatTooltip,{passive:true});
+    positionHeatTooltip();
   }
 }
 function renderModules(live, content) {
@@ -563,22 +629,77 @@ function renderFooter(live, content) {
   const stamp = fetched ? updatedLabel(fetched) : '';
   return `<footer class="footer">${content.site.footer_note ? `<p>${esc(content.site.footer_note)}</p>` : ''}
     数据更新于 ${stamp ? dateHTML(fetched,stamp) : '待同步'}
-    <span>${live ? `统计截至 ${dateHTML(live.data_through)} · ` : ''}<a class="version-link" href="#diary">v0.1.1</a></span>
+    <span>${live ? `统计截至 ${dateHTML(live.data_through)} · ` : ''}<a class="version-link" href="#changelog">v0.1.3</a></span>
     ${analyticsEnabled ? '<span>本站使用无 Cookie 的匿名访问统计</span>' : ''}</footer>`;
 }
 
 const backBar = (extra = '') => `<nav class="backbar" aria-label="返回"><a href="#" data-home>‹ 返回首页</a>${extra}
   ${state.offline ? '<span class="pill" role="status">离线</span>' : ''}</nav>`;
-function renderPlaceholder(page) {
-  const title = page === 'about' ? '缘起' : '开发日记';
-  return `${backBar()}<main><section class="panel placeholder-page">
-    <h1>${title} · 即将上线</h1>
-  </section></main>`;
+function renderAboutCard(kind, live) {
+  if (!live || !kind) return '';
+  const {date:first, dayLabel} = readingStart(live);
+  const cards = {
+    record_days:{label:'共读日',value:`${n(live.lifetime.record_days)} 天`},
+    total_hours:{label:'累计小时',value:`${n(Math.floor(live.lifetime.total_hours))} 小时`},
+    longest_streak:{label:'最长连续',value:`${n(live.streak.longest?.days ?? 0)} 天`},
+    week_reading_days:{label:'本周阅读日',value:`${weekReadingDays(live)}/7 天`},
+    since:{label:'开始共读',value:first ?? '待记录',detail:dayLabel},
+  };
+  const card = cards[kind];
+  return card ? `<div class="about-data" data-card="${esc(kind)}"><span>${card.label}</span>
+    <strong>${esc(card.value)}</strong>${card.detail ? `<span>${esc(card.detail)}</span>` : ''}</div>` : '';
+}
+function renderAbout(live, content) {
+  const about = content.about;
+  const back = backBar(pageLinks('about'));
+  if (!about) return `${back}<main><section class="panel placeholder-page"><h1>关于 · 即将上线</h1></section></main>`;
+  const paragraphs = (values) => values.map(text => `<p>${esc(text)}</p>`).join('');
+  const links = (about.links ?? []).filter(link => link.url.startsWith('https://'));
+  return `${back}<main class="about-page">
+    <section class="hero page-hero">${renderStars(live?.lifetime.total_hours ?? 0)}
+      <div class="hero-content"><p class="page-tagline">${esc(about.tagline)}</p>
+        <h1>${esc(about.title)}</h1><div class="page-intro">${paragraphs(about.paragraphs)}</div></div></section>
+    ${(about.sections ?? []).map((section,index) => `<section class="panel about-section">
+      <p class="section-number">${String(index + 1).padStart(2,'0')} · ${esc(section.en)}</p>
+      <h2>${esc(section.title)}</h2><div class="about-prose">${paragraphs(section.paragraphs)}</div>
+      ${renderAboutCard(section.card,live)}</section>`).join('')}
+    ${links.length ? `<section class="panel about-links" aria-label="相关链接">${links.map(link =>
+      `<a href="${esc(link.url)}" target="_blank" rel="noopener"><span><strong>${esc(link.name)}</strong>
+        ${link.paid ? '<small class="paid-label">付费</small>' : ''}${link.desc ? `<span class="link-description">${esc(link.desc)}</span>` : ''}</span>
+        <span aria-hidden="true">↗</span></a>`).join('')}</section>` : ''}
+    <a class="panel about-updates" href="#changelog">看看我们一路做了什么 <span aria-hidden="true">›</span></a>
+  </main>`;
+}
+function renderChangelog(live, content) {
+  const diary = content.diary ?? [];
+  const first = diary[diary.length - 1]?.date;
+  const today = shanghaiDate.format(new Date());
+  const days = first ? Math.max(1,Math.floor((dateValue(today) - dateValue(first)) / 86400000) + 1) : 0;
+  const groups = new Map();
+  for (const entry of diary) {
+    if (!groups.has(entry.date)) groups.set(entry.date,[]);
+    groups.get(entry.date).push(entry);
+  }
+  return `${backBar(pageLinks('changelog'))}<main class="changelog-page">
+    <section class="hero page-hero">${renderStars(live?.lifetime.total_hours ?? 0)}
+      <div class="hero-content"><h1>共读星图在长大</h1>
+        <p class="page-intro">这里记下看板的每一次更新：一个想法怎么变成数据、界面，再回到我们家的晚上。</p>
+        <div class="changelog-counts"><span>第 ${n(days)} 天</span><span>第 ${n(diary.length)} 次更新</span></div>
+      </div></section>
+    ${diary.length ? `<section class="panel changelog-timeline">${[...groups].map(([date,entries]) => `<section class="changelog-group">
+      <h2>${dateHTML(date,`${date.slice(0,4)} 年 ${shortDate(date)}`)}</h2>
+      ${entries.map(entry => `<article class="change-entry${entry === diary[0] ? ' latest-change' : ''}">
+        <span class="change-star" aria-hidden="true">✦</span><span class="change-version">${esc(entry.version)}</span>
+        <h3>${esc(entry.title)}</h3><p>${esc(entry.text)}</p></article>`).join('')}
+      </section>`).join('')}</section>` : '<p class="panel empty-changelog">还没有记录</p>'}
+  </main>`;
 }
 function renderAchievementPage(live, content) {
   return `${backBar()}<main><section class="hero achievement-hero">${renderStars(live.lifetime.total_hours)}
     <div class="hero-content"><p class="eyebrow">共读里程碑</p><h1>全部成就</h1><p>${esc(content.site.galaxy_tagline)}</p></div></section>
-    <section class="panel">${heading('共读勋章')}${renderMedals(live,content)}</section></main>`;
+    <section class="panel achievement-group">${heading('时长')}${renderMedals(achievementEntries(live),content)}</section>
+    ${live.next_day && live.day_milestones_reached ? `<section class="panel achievement-group">${heading('天数')}
+      ${renderMedals(achievementEntries(live,true),content)}</section>` : ''}</main>`;
 }
 function chooseFamilySet() {
   const sets = state.content.family?.sets ?? [];
@@ -597,7 +718,7 @@ function scheduleFamilyWarmup() {
   const warm = async () => {
     try {
       // Give the three visible portraits first use of the connection.
-      const visible = [...shell.querySelectorAll('.header-family img, .photo-avatar-strip img')];
+      const visible = [...shell.querySelectorAll('.road-face img, .photo-avatar-strip img')];
       await Promise.allSettled(visible.map((image) => image.decode()));
       const urls = (state.content.family?.sets ?? []).filter((set) => set.revision)
         .flatMap((set) => set.faces.map(faceURL)).filter((url) => !warmedFaces.has(url));
@@ -716,31 +837,34 @@ function revealPhotoControls(card) {
 }
 
 function renderCelebrationPage(live, content, entry, lang) {
-  const copy = resolve(content,entry.hours);
+  const copy = resolve(content,entry.value,entry.dayBased);
   const reached = entry.date || entry.preview;
-  const titlePrefix = reached ? '我们读了' : '下一站';
+  const unit = entry.dayBased ? '天' : '小时';
+  const titlePrefix = reached ? entry.dayBased ? '第' : '我们读了' : '下一站';
   const badge = copy.badge.trim().replace(/\s+/g, ' ');
-  const showBadge = badge && badge !== `${titlePrefix} ${n(entry.hours)} 小时` &&
-    badge !== `${titlePrefix} ${entry.hours} 小时`;
+  const showBadge = badge && badge !== `${titlePrefix} ${n(entry.value)} ${unit}` &&
+    badge !== `${titlePrefix} ${entry.value} ${unit}`;
   const eta = entry.eta ? `预计 ${dateHTML(entry.eta)} 到站` : '预计日期待定';
   const arrival = entry.date ? `到站于 ${dateHTML(entry.date)}` : eta;
-  const photo = content.photo?.[lang] ?? fallback.photo[lang];
+  const photo = entry.dayBased ? content.photo_days?.[lang] ?? {
+    before:lang === 'en' ? 'Our reading day' : '一起读到第',after:lang === 'en' ? 'days' : '天',
+  } : content.photo?.[lang] ?? fallback.photo[lang];
   const before = entry.locked ? (lang === 'en' ? 'Next milestone' : '下一站') : photo.before;
-  const stars = Math.max(live.lifetime.total_hours, entry.preview ? Math.min(entry.hours, 5000) : 0);
+  const stars = Math.max(live.lifetime.total_hours, entry.preview && !entry.dayBased ? Math.min(entry.value, 5000) : 0);
   const faces = celebrationAvatars();
   return `<div class="celebration-nav">${backBar('<a href="#achievements">全部成就</a>')}</div><main>
     <section class="hero celebration ${faces ? '' : 'no-family'}">${renderStars(stars, true)}
       ${entry.preview ? '<span class="preview-label">预演</span>' : ''}
       <a class="photo-back" href="#achievements" aria-label="返回全部成就">‹ ${lang === 'en' ? 'Back' : '返回'}</a>
       <div class="celebration-layout hero-content">
-        <div class="photo-feature"><div class="photo-medal">${medal(entry, lang === 'en' ? 'hours' : '小时')}</div>${faces}</div>
+        <div class="photo-feature"><div class="photo-medal">${medal(entry,lang === 'en' ? entry.dayBased ? 'days' : 'hours' : unit)}</div>${faces}</div>
         <div class="photo-copy" lang="${lang}">
-          <h1><span>${esc(before)}</span><strong class="photo-number">${n(entry.hours)}</strong><span>${esc(photo.after)}</span></h1>
+          <h1><span>${esc(before)}</span><strong class="photo-number">${n(entry.value)}</strong><span>${esc(photo.after)}</span></h1>
         </div>
         <div class="celebration-copy">
           ${showBadge ? `<p class="eyebrow">${esc(copy.badge)}</p>` : ''}
-          <h1>${titlePrefix} <strong>${n(entry.hours)}</strong> 小时</h1>
-          <p class="arrival-date">${entry.locked ? `还差 ${hours(entry.left)} · ${eta}` : arrival}</p>
+          <h1>${titlePrefix} <strong>${n(entry.value)}</strong> ${unit}</h1>
+          <p class="arrival-date">${entry.locked ? entry.dayBased ? `还差 ${entry.left} 个共读日` : `还差 ${hours(entry.left)} · ${eta}` : arrival}</p>
           ${copy.celebration ? `<p class="celebration-note">${esc(copy.celebration)}</p>` : ''}
           ${copy.message ? `<p class="celebration-message">${esc(copy.message)}</p>` : ''}
         </div>
@@ -817,18 +941,27 @@ shell.addEventListener('pointerup',(event) => {
   }
 });
 
-const homeBlocks = [renderArrival,renderGalaxy,renderToday,renderNext,renderWeek,renderMonth,
-  renderYears,renderConversions,renderAchievementBlock,renderHeatmap,renderModules];
+const homeBlocks = [renderArrival,renderGalaxy,renderToday,renderNext,renderWeek,renderHeatmap,
+  renderYears,renderConversions,renderAchievementBlock,renderModules];
 function route() {
-  const [path, query] = location.hash.slice(1).split('?');
+  let [path, query] = location.hash.slice(1).split('?');
+  if (path === 'diary') {
+    path = 'changelog';
+    const address = new URL(location.href);
+    address.hash = `changelog${query ? '?' + query : ''}`;
+    history.replaceState(history.state,'',address);
+  }
   const search = new URLSearchParams(location.search);
   const hashSearch = new URLSearchParams(query);
-  const requested = Number(hashSearch.get('celebrate') ?? search.get('celebrate'));
-  const preview = Number.isSafeInteger(requested) && requested > 0 && requested % 50 === 0 ? requested : null;
+  const requested = hashSearch.get('celebrate') ?? search.get('celebrate');
+  const isDay = requested?.startsWith('d');
+  const value = Number(isDay ? requested.slice(1) : requested);
+  const preview = requested && /^(?:d)?\d+$/.test(requested) &&
+    Number.isSafeInteger(value) && value > 0 && value % (isDay ? 100 : 50) === 0 ? requested : null;
   const lang = search.get('lang') === 'en' ? 'en' : 'zh';
-  const page = path === 'about' || path === 'diary' ? path : null;
-  const match = path.match(/^achievements(?:\/(\d+))?$/);
-  const achievement = match?.[1] ? Number(match[1]) : (match || page ? null : preview);
+  const page = path === 'about' || path === 'changelog' ? path : null;
+  const match = path.match(/^achievements(?:\/(d?\d+))?$/);
+  const achievement = match?.[1] ?? (match || page ? null : preview);
   return {preview, lang, page, achievement, subpage:Boolean(page || match || achievement)};
 }
 function render({background = false} = {}) {
@@ -838,12 +971,17 @@ function render({background = false} = {}) {
       shell.dataset.route === String(current.achievement) && shell.dataset.photoLang === current.lang) return;
   state.preview = current.preview;
   const entry = live && current.subpage
-    ? achievementEntries(live).find((item) => item.hours === current.achievement) : null;
-  if (entry && (entry.hours !== avatarVisit || !content.family?.sets.some((set) => set.id === photoSet))) {
+    ? achievementEntries(live,Boolean(current.achievement?.startsWith('d'))).find((item) => item.id === current.achievement) : null;
+  if (entry && (entry.id !== avatarVisit || !content.family?.sets.some((set) => set.id === photoSet))) {
     const warmGroup = !photoSet && content.family?.sets.find((set) => set.id === readerFamily?.group);
     photoSet = (warmGroup || chooseFamilySet())?.id ?? null;
   }
-  avatarVisit = entry?.hours ?? null;
+  avatarVisit = entry?.id ?? null;
+  for (const strip of shell.querySelectorAll('[data-scroll-key]')) {
+    homeScrollPositions.set(strip.dataset.scrollKey,{
+      left:strip.scrollLeft,end:strip.scrollWidth - strip.clientWidth - strip.scrollLeft < 2,
+    });
+  }
   photoObserver?.disconnect();
   ringObserver?.disconnect();
   clearTimeout(backTimer);
@@ -854,7 +992,7 @@ function render({background = false} = {}) {
   document.title = content.site.name;
   document.querySelector('meta[name="apple-mobile-web-app-title"]').content = content.site.short_name || content.site.name;
   if (current.page) {
-    shell.innerHTML = renderPlaceholder(current.page);
+    shell.innerHTML = current.page === 'about' ? renderAbout(live,content) : renderChangelog(live,content);
   } else if (!live) {
     shell.innerHTML = `${renderHeader(live,content)}<main><p class="panel notice" role="status">暂时无法读取共读数据，请联网后重试。</p></main>${renderFooter(live,content)}`;
   } else if (current.subpage) {
@@ -868,10 +1006,10 @@ function render({background = false} = {}) {
     }
   } else {
     shell.innerHTML = `${renderHeader(live,content)}${ringGradient}<main>${homeBlocks.map((block) => block(live,content)).join('')}</main>${renderFooter(live,content)}`;
-    drawHeatmap(live);
+    restoreHomeScroll();
     playBeanRoad();
     paintSyncControls();
-    for (const section of shell.querySelectorAll('.week, .month')) {
+    for (const section of shell.querySelectorAll('.week')) {
       paintReadingDetail(section,section.querySelector('[aria-pressed="true"]'));
     }
     animateReadingRings();
@@ -879,11 +1017,6 @@ function render({background = false} = {}) {
   if (previousRoute !== shell.dataset.route) window.scrollTo(0,current.subpage ? 0 : homeScroll);
 }
 shell.addEventListener('error', (event) => {
-  if (event.target.matches?.('[data-header-face]') && !headerFamilyFailed) {
-    headerFamilyFailed = true;
-    render();
-    return;
-  }
   if (event.target.matches?.('[data-reader-face]') && !readerFaceFailed) {
     readerFaceFailed = true;
     render();
@@ -905,10 +1038,21 @@ shell.addEventListener('error', (event) => {
   }
 }, true);
 shell.addEventListener('click', (event) => {
-  const dateButton = event.target.closest('button[data-month-date]:not(:disabled)');
+  const yearButton = event.target.closest('button[data-heat-year]');
+  if (yearButton) {
+    heatmapYear = yearButton.dataset.heatYear;
+    heatmapDate = null;
+    heatmapBubble = false;
+    homeScrollPositions.delete(`heat-${heatmapYear}`);
+    render();
+    return;
+  }
+  const dateButton = event.target.closest('button[data-heat-date]:not(:disabled)');
   if (dateButton) {
-    selectedMonthDate = dateButton.dataset.monthDate;
-    selectReadingDay(dateButton.closest('.month'),dateButton);
+    heatmapDate = dateButton.dataset.heatDate;
+    heatmapBubble = true;
+    selectReadingDay(dateButton.closest('.heatmap'),dateButton);
+    positionHeatTooltip();
     return;
   }
   if (event.target.closest('.sync-button')) {
@@ -943,7 +1087,7 @@ shell.addEventListener('click', (event) => {
     address.hash = '';
     history.pushState(null,'',address);
     render();
-  } else if (link && /^#(?:achievements|about|diary)/.test(link.hash) && shell.dataset.page === 'home') {
+  } else if (link && /^#(?:achievements|about|changelog|diary)/.test(link.hash) && shell.dataset.page === 'home') {
     homeScroll = window.scrollY;
   }
 });

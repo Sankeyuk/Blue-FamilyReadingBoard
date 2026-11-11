@@ -1,6 +1,6 @@
 const scope = self.registration.scope;
 const prefix = `coreading:${scope}:`;
-const shellCache = prefix + 'shell-v01-r18';
+const shellCache = prefix + 'shell-v01-r20';
 const dataCache = prefix + 'live-v1';
 const avatarCache = prefix + 'family-v1';
 const url = (path) => new URL(path,scope).href;
@@ -75,7 +75,10 @@ self.addEventListener('fetch',(event) => {
   if (event.request.method !== 'GET') return;
   const address = new URL(event.request.url);
   if (!address.href.startsWith(scope)) return;
-  if (event.request.mode === 'navigate') address.search = '';
+  if (event.request.mode === 'navigate') {
+    address.search = '';
+    address.hash = '';
+  }
   if (shell.has(address.href)) {
     const key = event.request.mode === 'navigate' && pages.has(address.href) ? url('./') : address.href;
     event.respondWith((async () => (await (await caches.open(shellCache)).match(key)) || fetch(event.request))());
