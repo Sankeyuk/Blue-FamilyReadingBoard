@@ -74,7 +74,7 @@ let analyticsEnabled = false;
 const analyticsOptOutKey = 'coreading:analytics-opt-out';
 history.scrollRestoration = 'manual';
 let photoObserver, backTimer, gesture;
-let postcardURL;
+let postcardObserver, postcardTimer;
 
 function analyticsAllowed() {
   const address = new URL(location.href);
@@ -910,111 +910,217 @@ function postcardLines(ctx, text, width) {
   return lines;
 }
 
-async function postcardImage(source, entry, message, signature) {
-  const image = new Image();
-  image.src = source;
+function postcardImage(image, entry, message, signature, orientation) {
+  const landscape = orientation === 'landscape';
+  const width = landscape ? 480 : 360;
+  const height = landscape ? 360 : 480;
+  const photoWidth = landscape ? width * .58 : width;
+  const photoHeight = landscape ? height : height * .62;
+  const canvas = document.createElement('canvas');
+  canvas.width = width * 3;
+  canvas.height = height * 3;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(3,3);
   const style = getComputedStyle(document.documentElement);
   const token = (key) => style.getPropertyValue('--ds-' + key).trim();
   const font = style.getPropertyValue('--ds-font').trim();
-  await Promise.all([image.decode(), document.fonts.load(`950 130px ${font}`).catch(() => {})]);
-  const canvas = document.createElement('canvas');
-  canvas.width = 1080;
-  canvas.height = 1440;
-  const ctx = canvas.getContext('2d');
-  const width = canvas.width;
-  const photoHeight = 864;
-  ctx.fillStyle = token('surface');
-  ctx.fillRect(0,0,width,canvas.height);
-  const scale = Math.max(width / image.naturalWidth, photoHeight / image.naturalHeight);
-  const cropWidth = width / scale;
-  const cropHeight = photoHeight / scale;
-  ctx.drawImage(image,(image.naturalWidth-cropWidth)/2,(image.naturalHeight-cropHeight)/2,
-    cropWidth,cropHeight,0,0,width,photoHeight);
+  const inset = 22;
+  const gap = 7;
+  const left = (landscape ? photoWidth : 0) + inset;
+  const copyTop = landscape ? 0 : photoHeight;
+  const textWidth = width - left - inset;
+  const textHeight = height - copyTop - 2 * 14;
 
-  const left = 78;
-  const textWidth = width - 2 * left;
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = token('photo-number');
-  ctx.font = `950 130px ${font}`;
-  const value = n(entry.value);
-  const valueLeft = left + (entry.dayBased ? 65 : 0);
-  const valueWidth = ctx.measureText(value).width;
-  ctx.fillText(value,valueLeft,1000,textWidth-160);
-  ctx.font = `800 52px ${font}`;
-  if (entry.dayBased) ctx.fillText('第',left,1016);
-  ctx.fillText(entry.dayBased ? '天' : '小时',valueLeft+Math.min(valueWidth,textWidth-160)+22,1016);
-  ctx.fillStyle = token('text-strong');
-  let size = 42;
+  ctx.fillStyle = token('surface');
+  ctx.fillRect(0,0,width,height);
+  const scale = Math.max(photoWidth / image.naturalWidth, photoHeight / image.naturalHeight);
+  const cropWidth = photoWidth / scale;
+  const cropHeight = photoHeight / scale;
+  ctx.drawImage(image,(image.naturalWidth-cropWidth)*.5,(image.naturalHeight-cropHeight)*.35,
+    cropWidth,cropHeight,0,0,photoWidth,photoHeight);
+
+  const strong = token('weight-strong');
+  const heavy = token('weight-heavy');
+  let numberSize = 61;
+  let unitSize = 19;
+  const pieces = entry.dayBased ? ['第', n(entry.value), '天'] : [n(entry.value), '小时'];
+  const numberIndex = entry.dayBased ? 1 : 0;
+  const titleFont = (index) => index === numberIndex ? `${heavy} ${numberSize}px ${font}` : `${strong} ${unitSize}px ${font}`;
+  const titleWidth = pieces.reduce((total, piece, index) => {
+    ctx.font = titleFont(index);
+    return total + ctx.measureText(piece).width;
+  }, (pieces.length-1)*5);
+  const titleScale = Math.min(1,textWidth / titleWidth);
+  numberSize *= titleScale;
+  unitSize *= titleScale;
+
+  let messageSize = 14;
   let lines;
+  const dateHeight = 14;
+  const signatureHeight = signature ? 12 : 0;
+  const fixedHeight = numberSize + dateHeight + signatureHeight + gap * (signature ? 3 : 2);
   do {
-    ctx.font = `600 ${size}px ${font}`;
+    ctx.font = `${strong} ${messageSize}px ${font}`;
     lines = postcardLines(ctx,message,textWidth);
-    size -= 2;
-  } while (lines.length > 3 && size >= 28);
-  if (lines.length > 3) {
-    const last = Array.from(lines[2]);
-    while (last.length && ctx.measureText(last.join('') + '…').width > textWidth) last.pop();
-    lines = [lines[0],lines[1],last.join('') + '…'];
+    if (lines.length * messageSize * 1.4 <= textHeight - fixedHeight) break;
+    messageSize *= .9;
+  } while (messageSize > 1);
+  const lineHeight = messageSize * 1.4;
+  const totalHeight = fixedHeight + lines.length * lineHeight;
+  const top = copyTop + (height - copyTop - totalHeight) / 2;
+  let x = left;
+  ctx.fillStyle = token('photo-number');
+  pieces.forEach((piece,index) => {
+    ctx.font = titleFont(index);
+    ctx.fillText(piece,x,top+numberSize*.84);
+    x += ctx.measureText(piece).width + 5*titleScale;
+  });
+
+  ctx.textBaseline = 'middle';
+  let y = top + numberSize + gap;
+  ctx.fillStyle = token('text-strong');
+  ctx.font = `${strong} ${messageSize}px ${font}`;
+  for (const line of lines) {
+    ctx.fillText(line,left,y+lineHeight/2);
+    y += lineHeight;
   }
-  lines.forEach((line,i) => ctx.fillText(line,left,1120+i*53));
+  y += gap;
   ctx.fillStyle = token('text');
-  ctx.font = `500 33px ${font}`;
-  ctx.fillText(`到站于 ${entry.date}`,left,1315);
-  ctx.fillStyle = token('text-muted');
-  ctx.font = `500 28px ${font}`;
-  ctx.fillText(signature,left,1377,textWidth);
-  return new Promise((resolve,reject) => canvas.toBlob((blob) => {
-    if (blob) resolve(blob);
-    else reject(new Error('Postcard unavailable'));
-  },'image/png'));
+  ctx.font = `400 11px ${font}`;
+  ctx.fillText(`到站于 ${entry.date}`,left,y+dateHeight/2);
+  if (signature) {
+    ctx.fillStyle = token('text-muted');
+    ctx.font = `400 10px ${font}`;
+    ctx.fillText(signature,left,y+dateHeight+gap+signatureHeight/2,textWidth);
+  }
+  // Keep the click's transient activation for the iPhone share sheet.
+  const encoded = canvas.toDataURL('image/png').split(',')[1];
+  return new Blob([Uint8Array.from(atob(encoded), char => char.charCodeAt(0))],{type:'image/png'});
 }
 
 function mountPhotoMode(live, content, entry, lang) {
+  document.documentElement.removeAttribute('data-postcard');
   shell.dataset.photoLang = lang;
   shell.innerHTML = renderCelebrationPage(live,content,entry,lang);
   paintMotionState();
   watchPhotoStars();
 }
 
-async function mountPostcard(live, content, entry, lang, source, message, signature, key) {
+function fitPostcardCopy(copy) {
+  const text = copy.querySelector('.postcard-text');
+  const message = copy.querySelector('.postcard-message');
+  message.style.removeProperty('font-size');
+  const style = getComputedStyle(copy);
+  const available = copy.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+  if (text.offsetHeight <= available) return;
+  let high = parseFloat(getComputedStyle(message).fontSize);
+  let low = 4;
+  for (let i=0;i<8;i++) {
+    const size = (low+high)/2;
+    message.style.fontSize = `${size}px`;
+    if (text.offsetHeight <= available) low = size;
+    else high = size;
+  }
+  message.style.fontSize = `${low}px`;
+}
+
+function mountPostcard(live, content, entry, lang, source, message, signature, key) {
   const label = entry.dayBased ? `第 ${n(entry.value)} 天` : `${n(entry.value)} 小时`;
-  shell.innerHTML = `${backBar('<a href="#achievements">全部成就</a>')}<main class="postcard">
-    <p class="postcard-loading" role="status">正在生成明信片…</p>
-    <img class="postcard-image" width="1080" height="1440" alt="${esc(`${label}纪念明信片 · ${message} · ${entry.date}`)}" hidden>
-    <div class="postcard-actions" hidden>
-      <button type="button" class="postcard-share" hidden>分享</button>
-      <a class="postcard-save">保存图片</a>
+  document.documentElement.setAttribute('data-postcard','');
+  shell.innerHTML = `<main class="postcard" tabindex="0" aria-label="${esc(label)}纪念明信片">
+    <img class="postcard-image" src="${esc(source)}" alt="共读纪念照">
+    <section class="postcard-copy"><div class="postcard-text">
+      <h1 class="postcard-title" aria-label="${esc(label)}">${entry.dayBased ? '<span>第</span>' : ''}
+        <strong class="postcard-value">${n(entry.value)}</strong> <span>${entry.dayBased ? '天' : '小时'}</span></h1>
+      <p class="postcard-message">${esc(message)}</p>
+      <p class="postcard-date">到站于 ${dateHTML(entry.date)}</p>
+      ${signature ? `<p class="postcard-signature">${esc(signature)}</p>` : ''}
+    </div></section>
+    <div class="postcard-controls" aria-hidden="false">
+      <a class="postcard-control postcard-back" href="#achievements">‹ 返回</a>
+      <a class="postcard-control postcard-mode" href="${achievementURL(entry.id)}?photo=1">拍照模式</a>
+      <div class="postcard-actions">
+        <button class="postcard-control postcard-share" type="button" hidden disabled>分享</button>
+        <button class="postcard-control postcard-save" type="button" disabled>保存图片</button>
+      </div>
     </div>
-    <p class="postcard-hint" hidden>长按上面的图片存到相册</p>
-    <a class="postcard-mode" href="${achievementURL(entry.id)}?photo=1">拍照模式</a>
   </main>`;
   const panel = shell.querySelector('.postcard');
   panel.dataset.key = key;
-  try {
-    const blob = await postcardImage(source,entry,message,signature);
-    if (!panel.isConnected) return;
-    postcardURL = URL.createObjectURL(blob);
-    const preview = panel.querySelector('.postcard-image');
-    const save = panel.querySelector('.postcard-save');
-    const share = panel.querySelector('.postcard-share');
-    const filename = `coreading-${memoryKey(entry)}.png`;
-    preview.src = postcardURL;
-    save.href = postcardURL;
-    save.download = filename;
-    const file = new File([blob],filename,{type:'image/png'});
-    const files = [file];
-    if (navigator.share && navigator.canShare?.({files})) {
-      share.hidden = false;
-      share.addEventListener('click',() => navigator.share({files}).catch(() => {}));
+  const copy = panel.querySelector('.postcard-copy');
+  const image = panel.querySelector('.postcard-image');
+  const controls = panel.querySelector('.postcard-controls');
+  const save = panel.querySelector('.postcard-save');
+  const share = panel.querySelector('.postcard-share');
+  const filename = `coreading-${memoryKey(entry)}.png`;
+  share.hidden = !(navigator.share && navigator.canShare?.({files:[
+    new File([new Uint8Array([137,80,78,71])],filename,{type:'image/png'}),
+  ]}));
+  const setControls = (visible) => {
+    controls.setAttribute('aria-hidden',String(!visible));
+    controls.inert = !visible;
+  };
+  const toggle = () => {
+    clearTimeout(postcardTimer);
+    setControls(controls.getAttribute('aria-hidden') === 'true');
+  };
+  postcardTimer = setTimeout(() => setControls(false),2000);
+  controls.addEventListener('focusin',() => clearTimeout(postcardTimer));
+  panel.addEventListener('click',(event) => {
+    if (!event.target.closest('button,a')) toggle();
+  });
+  panel.addEventListener('keydown',(event) => {
+    if (event.target === panel && ['Enter',' '].includes(event.key)) {
+      event.preventDefault();
+      toggle();
     }
-    panel.querySelector('.postcard-loading').remove();
-    preview.hidden = false;
-    panel.querySelector('.postcard-actions').hidden = false;
-    panel.querySelector('.postcard-hint').hidden = !/iPhone|iPad|iPod/.test(navigator.userAgent);
-  } catch {
-    if (panel.isConnected) mountPhotoMode(live,content,entry,lang);
-  }
+  });
+  const enableExport = () => {
+    document.fonts.ready.then(() => { save.disabled = share.disabled = false; });
+  };
+  image.addEventListener('load',enableExport,{once:true});
+  if (image.complete && image.naturalWidth) enableExport();
+  image.addEventListener('error',() => {
+    if (!panel.isConnected) return;
+    clearTimeout(postcardTimer);
+    postcardObserver?.disconnect();
+    mountPhotoMode(live,content,entry,lang);
+  },{once:true});
+
+  const exportFile = () => {
+    const orientation = matchMedia('(orientation: landscape)').matches ? 'landscape' : 'portrait';
+    return new File([postcardImage(image,entry,message,signature,orientation)],filename,{type:'image/png'});
+  };
+  save.addEventListener('click',() => {
+    const url = URL.createObjectURL(exportFile());
+    const download = document.createElement('a');
+    download.href = url;
+    download.download = filename;
+    download.hidden = true;
+    panel.append(download);
+    download.click();
+    download.remove();
+    setTimeout(() => URL.revokeObjectURL(url),1000);
+  });
+  share.addEventListener('click',() => {
+    const files = [exportFile()];
+    if (navigator.canShare({files})) navigator.share({files}).catch(() => {});
+  });
+
+  const fit = () => { if (panel.isConnected) fitPostcardCopy(copy); };
+  postcardObserver = new ResizeObserver(fit);
+  postcardObserver.observe(copy);
+  document.fonts.ready.then(fit);
+  fit();
 }
+
+document.addEventListener('keydown',(event) => {
+  const back = shell.querySelector('.postcard-back');
+  if (event.key === 'Escape' && back) {
+    event.preventDefault();
+    location.hash = back.hash;
+  }
+});
 
 function watchPhotoStars() {
   const card = shell.querySelector('.celebration');
@@ -1115,10 +1221,9 @@ function render({background = false} = {}) {
   if (background && (postcardKey ? shell.querySelector('.postcard')?.dataset.key === postcardKey :
     shell.querySelector('.celebration') && shell.dataset.route === String(current.achievement) &&
     shell.dataset.photoLang === current.lang)) return;
-  if (postcardURL) {
-    URL.revokeObjectURL(postcardURL);
-    postcardURL = undefined;
-  }
+  document.documentElement.removeAttribute('data-postcard');
+  postcardObserver?.disconnect();
+  clearTimeout(postcardTimer);
   if (entry && (entry.id !== avatarVisit || !content.family?.sets.some((set) => set.id === photoSet))) {
     const warmGroup = !photoSet && content.family?.sets.find((set) => set.id === readerFamily?.group);
     photoSet = (warmGroup || chooseFamilySet())?.id ?? null;
@@ -1144,7 +1249,7 @@ function render({background = false} = {}) {
     shell.innerHTML = `${renderHeader(live,content)}<main><p class="panel notice" role="status">暂时无法读取共读数据，请联网后重试。</p></main>${renderFooter(live,content)}`;
   } else if (current.subpage) {
     if (entry) {
-      if (photo) void mountPostcard(live,content,entry,current.lang,photo,message,signature,postcardKey);
+      if (photo) mountPostcard(live,content,entry,current.lang,photo,message,signature,postcardKey);
       else mountPhotoMode(live,content,entry,current.lang);
     } else {
       shell.innerHTML = renderAchievementPage(live,content);
