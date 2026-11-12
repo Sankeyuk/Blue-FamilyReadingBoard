@@ -1,6 +1,6 @@
 const scope = self.registration.scope;
 const prefix = `coreading:${scope}:`;
-const shellVersion = 'r23';
+const shellVersion = 'r26';
 const shellCache = prefix + 'shell-v01-' + shellVersion;
 const dataCache = prefix + 'live-v1';
 const avatarCache = prefix + 'family-v1';
@@ -12,7 +12,7 @@ const memoryIndex = url('./memories.json');
 const legacyAvatarPrefix = url('./assets/celebration-avatars/');
 const shell = new Set([
   './','./index.html','./style.css','./app.js',
-  './themes/starmap/theme.css','./themes/starmap/assets/Inter-Variable.ttf','./assets/icon-192.png',
+  './themes/starmap/theme.css','./themes/starmap/theme.json','./themes/starmap/assets/Inter-Variable.ttf','./assets/icon-192.png',
 ].map(url));
 const pages = new Set([url('./'),url('./index.html')]);
 const live = new Set([url('./live.json'),url('./sample/live.json')]);
@@ -88,6 +88,26 @@ async function networkFirst(request, cacheName = dataCache) {
     clearTimeout(timer);
   }
 }
+async function versionedMemory(request, address) {
+  const retry = address.searchParams.has('retry');
+  address.searchParams.delete('retry');
+  const key = address.href;
+  const cache = await caches.open(memoryCache).catch(() => null);
+  if (!retry) {
+    const saved = await cache?.match(key).catch(() => null);
+    if (saved) return saved;
+  }
+  try {
+    const response = await fetch(request,{cache:'no-store'});
+    if (!response.ok || response.status === 206) return response;
+    // Cache.put resolves after the complete body is available.
+    await cache?.put(key,response.clone()).catch(() => {});
+    return response;
+  } catch {
+    return new Response(null,{status:503});
+  }
+}
+
 self.addEventListener('fetch',(event) => {
   if (event.request.method !== 'GET') return;
   const address = new URL(event.request.url);
@@ -108,7 +128,9 @@ self.addEventListener('fetch',(event) => {
       return networkFirst(event.request,avatarCache);
     })());
   } else if (address.href.startsWith(memoryPrefix)) {
-    event.respondWith(networkFirst(event.request,memoryCache));
+    event.respondWith(address.searchParams.has('v')
+      ? versionedMemory(event.request,address)
+      : networkFirst(event.request,memoryCache));
   } else if (liveKey(address.href) || address.href === copy || address.href === memoryIndex ||
     /^(themes\/|assets\/|manifest\.webmanifest$)/.test(address.href.slice(scope.length))) {
     event.respondWith(networkFirst(event.request));

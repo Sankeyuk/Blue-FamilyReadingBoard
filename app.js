@@ -6,7 +6,7 @@ const READING_DAY_MINUTES = 5;
 const BLUE_RING_MINUTES = 30;
 const GOLD_RING_MINUTES = 60;
 const WEEK_GOAL_MINUTES = 210;
-const SHELL_VERSION = 'r23';
+const SHELL_VERSION = 'r26';
 const SHARE_LABELS = {day:'当天',week:'本周',month:'本月',year:'今年'};
 const PUBLIC_BOARD_URL = 'https://sankeyuk.github.io/Blue-FamilyReadingBoard/';
 const fallback = {
@@ -138,10 +138,19 @@ function pageLinks(current = '') {
   return `<span class="page-links"><a href="#about"${current === 'about' ? ' aria-current="page"' : ''}>关于</a>
     <span aria-hidden="true">·</span><a href="#changelog"${current === 'changelog' ? ' aria-current="page"' : ''}>更新</a></span>`;
 }
+const bookArt = () => `<svg viewBox="0 0 24 24" aria-hidden="true">
+  <path class="book-line" d="M12 20c-2.2-2-5-3-9-3V8c4 0 6.8 1 9 3 2.2-2 5-3 9-3v9c-4 0-6.8 1-9 3Zm0 0v-9"/>
+</svg>`;
 function renderHeader(live, content) {
-  return `<header class="mast"><nav aria-label="看板页面">${pageLinks()}</nav>
+  const portraits = readerFamily ? readerFamily.faces.map((face) =>
+    `<img class="reader-portrait" data-header-face src="${esc(faceURL(face.path))}" alt="${esc(face.name)}">`).join('') : '';
+  const badge = `<div class="header-badge"><span class="header-family">${portraits}</span><span class="badge-book">${bookArt()}</span>
+    ${portraits ? `<svg class="badge-arc" viewBox="0 0 104 64" aria-hidden="true">
+      <circle cx="10" cy="19" r="1.5"/><circle cx="27" cy="10" r="1.7"/><circle class="arc-gold" cx="47" cy="4" r="2.5"/><circle cx="66" cy="8" r="1.8"/><circle cx="84" cy="16" r="1.5"/>
+    </svg>` : ''}</div>`;
+  return `<header class="mast">${badge}
     <div class="mast-brand"><p class="eyebrow">${esc(content.site.subtitle)}</p><h1>${esc(content.site.name)}</h1></div>
-    <div class="mast-status">${state.offline ? '<span class="pill" role="status">离线</span>' : ''}</div></header>`;
+    <div class="mast-status"><nav aria-label="看板页面">${pageLinks()}</nav>${state.offline ? '<span class="pill" role="status">离线</span>' : ''}</div></header>`;
 }
 function renderArrival(live, content) {
   const milestone = live.celebrate;
@@ -177,13 +186,54 @@ function starPoints(total, config) {
     return {x,y,gold,color,radius,opacity};
   });
 }
+const systemDark = matchMedia('(prefers-color-scheme: dark)');
+const landscapePhoto = matchMedia('(orientation: landscape)');
+const documentTheme = document.documentElement.dataset;
+
+function displayMode(forceLight) {
+  return forceLight || !systemDark.matches ? 'light' : 'dark';
+}
+
+function photoUsesLight(current) {
+  return current.photoMode || current.lang === 'en' || landscapePhoto.matches;
+}
+
+function refreshDisplayMode() {
+  const celebration = shell.querySelector('.celebration');
+  const mode = displayMode(documentTheme.postcard !== undefined || (celebration && photoUsesLight(route())));
+  if (documentTheme.mode === mode) return;
+  documentTheme.mode = mode;
+  for (const sky of shell.querySelectorAll('.stars')) {
+    sky.outerHTML = renderStars(Number(sky.dataset.total),sky.getAttribute('preserveAspectRatio') === 'none');
+  }
+  if (celebration) {
+    photoObserver?.disconnect();
+    watchPhotoStars();
+  }
+}
+
+systemDark.addEventListener('change',refreshDisplayMode);
+landscapePhoto.addEventListener('change',refreshDisplayMode);
+
+// Resolve export colors without changing the visible page or its color scheme.
+const exportPalette = document.createElement('div');
+exportPalette.hidden = true;
+exportPalette.dataset.mode = 'light';
+
+function lightThemeTokenReader() {
+  exportPalette.dataset.theme = documentTheme.theme;
+  if (!exportPalette.isConnected) document.body.append(exportPalette);
+  const style = getComputedStyle(exportPalette);
+  return (key) => style.getPropertyValue('--ds-' + key).trim();
+}
+
 function renderStars(total, photo = false) {
-  const config = state.theme?.stars;
+  const config = state.theme?.stars?.[documentTheme.mode];
   if (!config) return '';
   const [width,height] = config.viewBox;
   const circles = starPoints(total,config).map(({x,y,gold,color,radius,opacity}) =>
     `<circle class="${gold ? 'gold-star' : 'star'}" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${radius.toFixed(2)}" ${gold ? '' : `fill="${esc(color)}"`} opacity="${(photo ? opacity * .6 : opacity).toFixed(2)}"/>`).join('');
-  return `<svg class="stars" viewBox="0 0 ${width} ${height}" preserveAspectRatio="${photo ? 'none' : 'xMidYMid slice'}" aria-hidden="true">${circles}</svg>`;
+  return `<svg class="stars" data-total="${total}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="${photo ? 'none' : 'xMidYMid slice'}" aria-hidden="true">${circles}</svg>`;
 }
 function renderGalaxy(live, content) {
   const {lifetime, streak} = live;
@@ -531,6 +581,44 @@ function medal(entry, unit = entry.dayBased ? '天' : '小时') {
 const memoryKey = (entry) => `${entry.value}${entry.dayBased ? 'd' : 'h'}`;
 const memoryPhoto = (entry) => entry?.date ? state.memories[memoryKey(entry)]?.photo : null;
 
+function memoryImage(source, className, {compact = false, lazy = false} = {}) {
+  return `<div class="memory-image ${className}" data-memory-source="${esc(source)}" data-memory-state="loading">
+    <img alt="${compact ? '' : '共读纪念照'}"${lazy ? ' loading="lazy"' : ''}>
+    <span class="memory-image-status" role="status" aria-label="照片加载中…">${compact ? '…' : '照片加载中…'}</span>
+    <button class="memory-image-retry" type="button" aria-label="照片没加载出来，轻点重试"
+      title="照片没加载出来，轻点重试" hidden>${compact ? '!' : '照片没加载出来，轻点重试'}</button>
+  </div>`;
+}
+
+function mountMemoryImage(frame, onReady) {
+  const image = frame.querySelector('img');
+  const status = frame.querySelector('.memory-image-status');
+  const retry = frame.querySelector('button');
+  const compact = frame.classList.contains('memory-thumbnail');
+  let attempts = 0;
+  image.addEventListener('load',() => {
+    frame.dataset.memoryState = 'ready';
+    onReady?.();
+  });
+  image.addEventListener('error',() => {
+    frame.dataset.memoryState = 'error';
+    retry.hidden = attempts >= 3;
+    status.textContent = compact ? '!' : '照片没加载出来';
+    status.setAttribute('aria-label','照片没加载出来');
+  });
+  retry.addEventListener('click',() => {
+    if (attempts >= 3 || frame.dataset.memoryState !== 'error') return;
+    const address = new URL(frame.dataset.memorySource,location.href);
+    address.searchParams.set('retry',`${Date.now()}-${++attempts}`);
+    frame.dataset.memoryState = 'loading';
+    status.textContent = compact ? '…' : '照片加载中…';
+    status.setAttribute('aria-label','照片加载中…');
+    retry.hidden = true;
+    image.src = address.href;
+  });
+  image.src = frame.dataset.memorySource;
+}
+
 function renderMedals(entries, content, strip = false) {
   return `<div class="${strip ? 'achievement-strip' : 'medals'}"${strip ? ` data-scroll-key="medals-${entries[0].dayBased ? 'days' : 'hours'}"` : ''}>${entries.map((entry) => {
     const copy = resolve(content,entry.value,entry.dayBased);
@@ -538,9 +626,10 @@ function renderMedals(entries, content, strip = false) {
     const status = entry.date ? dateHTML(entry.date,longDate) : entry.preview ? '<span class="preview-label">预演</span>' :
       `下一站 · 还差 ${entry.dayBased ? `${entry.left} 个共读日` : hours(entry.left)}${entry.eta ? `<br>预计 ${dateHTML(entry.eta,dayMonth(entry.eta))}` : ''}`;
     const photo = memoryPhoto(entry);
-    return `<a class="achievement ${entry.locked ? 'is-locked' : 'is-reached'}" data-achievement="${entry.id}" href="${achievementURL(entry.id)}">
+    const link = `<a class="achievement ${entry.locked ? 'is-locked' : 'is-reached'}" data-achievement="${entry.id}" href="${achievementURL(entry.id)}">
       ${medal(entry)}<b>${esc(copy.badge || `第 ${entry.value} ${entry.dayBased ? '天' : '小时'}`)}</b><span>${status}</span>
-      <span class="memory-slot" aria-hidden="true">${photo ? `<img src="${esc(photo)}" alt="" loading="lazy">` : ''}</span></a>`;
+      <span class="memory-slot" aria-hidden="true"></span></a>`;
+    return photo ? `<div class="achievement-with-memory">${link}${memoryImage(photo,'memory-thumbnail',{compact:true,lazy:true})}</div>` : link;
   }).join('')}</div>`;
 }
 function renderAchievementBlock(live, content) {
@@ -654,9 +743,10 @@ function renderModules(live, content) {
 function renderFooter(live, content) {
   const fetched = live?.fetched_at;
   const stamp = fetched ? updatedLabel(fetched) : '';
+  const version = content.diary?.[0]?.version;
   return `<footer class="footer">${content.site.footer_note ? `<p>${esc(content.site.footer_note)}</p>` : ''}
     数据更新于 ${stamp ? dateHTML(fetched,stamp) : '待同步'}
-    <span>${live ? `统计截至 ${dateHTML(live.data_through)} · ` : ''}<a class="version-link" href="#changelog">v0.2</a></span>
+    ${live || version ? `<span>${live ? `统计截至 ${dateHTML(live.data_through)}` : ''}${live && version ? ' · ' : ''}${version ? `<a class="version-link" href="#changelog">${esc(version)}</a>` : ''}</span>` : ''}
     ${analyticsEnabled ? '<span>本站使用无 Cookie 的匿名访问统计</span>' : ''}</footer>`;
 }
 
@@ -986,7 +1076,21 @@ function yesterdayStreak(live) {
   }
 }
 
-function shareCardImage(live, site, type, day) {
+async function loadShareFaces() {
+  if (readerFamily?.faces.length !== 3) return null;
+  try {
+    return await Promise.all(readerFamily.faces.map(async ({path}) => {
+      const image = new Image();
+      image.src = faceURL(path);
+      await image.decode();
+      return image;
+    }));
+  } catch {
+    return null;
+  }
+}
+
+function shareCardImage(live, site, type, day, portraits) {
   const width = 360;
   const height = 480;
   const middle = width / 2;
@@ -995,8 +1099,7 @@ function shareCardImage(live, site, type, day) {
   canvas.height = height * 3;
   const ctx = canvas.getContext('2d');
   ctx.scale(3,3);
-  const style = getComputedStyle(document.documentElement);
-  const token = (key) => style.getPropertyValue('--ds-' + key).trim();
+  const token = lightThemeTokenReader();
   const font = token('font');
   const ink = token('hero-text');
   const secondary = token('text');
@@ -1005,13 +1108,16 @@ function shareCardImage(live, site, type, day) {
   const strong = token('weight-strong');
   const heatColors = levels.map((_,i) => token(`level-${i}`));
   const alt = [site.name];
+  // Make room for portraits while keeping the type sizes and footer fixed.
+  let body = false;
+  const bodyY = (y) => body && portraits ? 110 + (y - 80) * .92 : y;
   const setFont = (size, weight) => { ctx.font = `${weight} ${size}px ${font}`; };
   const label = (text, x, y, size = 11, weight = 400, color = secondary, maxWidth = 302) => {
     setFont(size,weight);
     ctx.fillStyle = color;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.fillText(text,x,y,maxWidth);
+    ctx.fillText(text,x,bodyY(y),maxWidth);
   };
   const copy = (text, y, size = 11, weight = 400, color = secondary) => {
     setFont(size,weight);
@@ -1021,6 +1127,7 @@ function shareCardImage(live, site, type, day) {
     return lines.length * (size + 4);
   };
   const ring = (x, y, radius, fraction, lineWidth, color = blue) => {
+    y = bodyY(y);
     ctx.lineWidth = lineWidth;
     ctx.lineCap = 'round';
     ctx.strokeStyle = token('line');
@@ -1037,7 +1144,7 @@ function shareCardImage(live, site, type, day) {
   const tile = (x, y, size, level) => {
     ctx.fillStyle = heatColors[level] || heatColors[0];
     ctx.beginPath();
-    ctx.roundRect(x,y,size,size,Math.min(3,size / 4));
+    ctx.roundRect(x,bodyY(y),size,size,Math.min(3,size / 4));
     ctx.fill();
   };
   const heatLegend = (y) => levels.forEach((level,i) => {
@@ -1057,7 +1164,7 @@ function shareCardImage(live, site, type, day) {
   background.addColorStop(1,token('hero-line'));
   ctx.fillStyle = background;
   ctx.fillRect(0,0,width,height);
-  const stars = state.theme?.stars;
+  const stars = state.theme?.stars?.light;
   if (stars) {
     const [starWidth,starHeight] = stars.viewBox;
     ctx.save();
@@ -1079,7 +1186,27 @@ function shareCardImage(live, site, type, day) {
   ctx.beginPath();
   ctx.roundRect(13,13,334,454,15);
   ctx.stroke();
-  label(site.name,middle,40,12,strong);
+  if (portraits) {
+    for (const index of [0,2,1]) {
+      const image = portraits[index];
+      const radius = index === 1 ? 128 / 6 : 16;
+      const x = middle + (index - 1) * 30;
+      const y = index === 1 ? 43 : 46;
+      const size = Math.min(image.naturalWidth,image.naturalHeight);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x,y,radius,0,Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(image,(image.naturalWidth - size) / 2,(image.naturalHeight - size) / 2,size,size,
+        x - radius,y - radius,radius * 2,radius * 2);
+      ctx.restore();
+      ctx.strokeStyle = token('hero-gold');
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+  label(site.short_name || site.name,middle,portraits ? 77 : 40,12,strong);
+  body = true;
   const through = live.data_through;
   const year = through.slice(0,4);
 
@@ -1187,6 +1314,7 @@ function shareCardImage(live, site, type, day) {
   ctx.lineWidth = 1;
   ctx.lineCap = 'butt';
   ctx.beginPath();
+  body = false;
   ctx.moveTo(36,400);
   ctx.lineTo(324,400);
   ctx.stroke();
@@ -1205,9 +1333,9 @@ function shareCardImage(live, site, type, day) {
   return {blob:canvasPNG(canvas),description:alt.join(' · ')};
 }
 
-function cachedShareCard(live, site, type, day) {
+function cachedShareCard(live, site, type, day, portraits) {
   const revision = JSON.stringify([live.data_through,live.fetched_at,live.generated_at,
-    document.documentElement.dataset.theme,site.name,site.share_signature,site.share_show_url]);
+    documentTheme.theme,'light',site.name,site.short_name,site.share_signature,site.share_show_url,readerFamily?.group,Boolean(portraits)]);
   if (shareCardRevision !== revision) {
     for (const {url} of shareCardCache.values()) URL.revokeObjectURL(url);
     shareCardCache.clear();
@@ -1215,7 +1343,7 @@ function cachedShareCard(live, site, type, day) {
   }
   const key = type === 'day' ? day : type;
   if (!shareCardCache.has(key)) {
-    const {blob,description} = shareCardImage(live,site,type,day);
+    const {blob,description} = shareCardImage(live,site,type,day,portraits);
     const date = type === 'day' ? live[day].date : live.data_through;
     const file = new File([blob],`${site.name}-${SHARE_LABELS[type]}-${date}.png`,{type:'image/png'});
     shareCardCache.set(key,{file,description,url:URL.createObjectURL(file)});
@@ -1245,9 +1373,9 @@ function mountSharePage(live, site, type, daySelection) {
   if (!live) return;
   const panel = shell.querySelector('.share-page');
   const status = panel.querySelector('.share-status');
-  document.fonts.ready.then(() => {
+  Promise.all([document.fonts.ready,loadShareFaces()]).then(([,portraits]) => {
     if (!panel.isConnected) return;
-    const {file,description,url} = cachedShareCard(live,site,type,day);
+    const {file,description,url} = cachedShareCard(live,site,type,day,portraits);
     const image = panel.querySelector('.share-preview');
     image.alt = description;
     image.src = url;
@@ -1273,9 +1401,8 @@ function postcardImage(image, entry, message, signature, orientation) {
   canvas.height = height * 3;
   const ctx = canvas.getContext('2d');
   ctx.scale(3,3);
-  const style = getComputedStyle(document.documentElement);
-  const token = (key) => style.getPropertyValue('--ds-' + key).trim();
-  const font = style.getPropertyValue('--ds-font').trim();
+  const token = lightThemeTokenReader();
+  const font = token('font');
   const inset = 22;
   const gap = 7;
   const left = (landscape ? photoWidth : 0) + inset;
@@ -1352,6 +1479,12 @@ function mountPhotoMode(live, content, entry, lang) {
   document.documentElement.removeAttribute('data-postcard');
   shell.dataset.photoLang = lang;
   shell.innerHTML = renderCelebrationPage(live,content,entry,lang);
+  const photo = memoryPhoto(entry);
+  if (photo) {
+    const card = shell.querySelector('.celebration');
+    card.insertAdjacentHTML('beforeend',memoryImage(photo,'photo-mode-memory'));
+    mountMemoryImage(card.querySelector('.photo-mode-memory'));
+  }
   paintMotionState();
   watchPhotoStars();
 }
@@ -1374,11 +1507,11 @@ function fitPostcardCopy(copy) {
   message.style.fontSize = `${low}px`;
 }
 
-function mountPostcard(live, content, entry, lang, source, message, signature, key) {
+function mountPostcard(entry, source, message, signature, key) {
   const label = entry.dayBased ? `第 ${n(entry.value)} 天` : `${n(entry.value)} 小时`;
   document.documentElement.setAttribute('data-postcard','');
   shell.innerHTML = `<main class="postcard" tabindex="0" aria-label="${esc(label)}纪念明信片">
-    <img class="postcard-image" src="${esc(source)}" alt="共读纪念照">
+    ${memoryImage(source,'postcard-photo')}
     <section class="postcard-copy"><div class="postcard-text">
       <h1 class="postcard-title" aria-label="${esc(label)}">${entry.dayBased ? '<span>第</span>' : ''}
         <strong class="postcard-value">${n(entry.value)}</strong> <span>${entry.dayBased ? '天' : '小时'}</span></h1>
@@ -1398,7 +1531,8 @@ function mountPostcard(live, content, entry, lang, source, message, signature, k
   const panel = shell.querySelector('.postcard');
   panel.dataset.key = key;
   const copy = panel.querySelector('.postcard-copy');
-  const image = panel.querySelector('.postcard-image');
+  const frame = panel.querySelector('.postcard-photo');
+  const image = frame.querySelector('img');
   const controls = panel.querySelector('.postcard-controls');
   const save = panel.querySelector('.postcard-save');
   const share = panel.querySelector('.postcard-share');
@@ -1412,7 +1546,7 @@ function mountPostcard(live, content, entry, lang, source, message, signature, k
     clearTimeout(postcardTimer);
     setControls(controls.getAttribute('aria-hidden') === 'true');
   };
-  postcardTimer = setTimeout(() => setControls(false),2000);
+
   controls.addEventListener('focusin',() => clearTimeout(postcardTimer));
   panel.addEventListener('click',(event) => {
     if (!event.target.closest('button,a')) toggle();
@@ -1423,17 +1557,15 @@ function mountPostcard(live, content, entry, lang, source, message, signature, k
       toggle();
     }
   });
-  const enableExport = () => {
-    document.fonts.ready.then(() => { save.disabled = share.disabled = false; });
-  };
-  image.addEventListener('load',enableExport,{once:true});
-  if (image.complete && image.naturalWidth) enableExport();
-  image.addEventListener('error',() => {
-    if (!panel.isConnected) return;
-    clearTimeout(postcardTimer);
-    postcardObserver?.disconnect();
-    mountPhotoMode(live,content,entry,lang);
-  },{once:true});
+  mountMemoryImage(frame,() => {
+    document.fonts.ready.then(() => {
+      if (!panel.isConnected) return;
+      save.disabled = share.disabled = false;
+      if (!controls.contains(document.activeElement)) {
+        postcardTimer = setTimeout(() => setControls(false),2000);
+      }
+    });
+  });
 
   const exportFile = () => {
     const orientation = matchMedia('(orientation: landscape)').matches ? 'landscape' : 'portrait';
@@ -1553,10 +1685,11 @@ function render({background = false} = {}) {
   const photo = !current.photoMode && memoryPhoto(entry);
   const message = photo ? postcardMessage(content,entry) : '';
   const signature = content.site.share_signature ?? '';
-  const postcardKey = photo && JSON.stringify([photo,entry.date,message,signature,document.documentElement.dataset.theme]);
+  const postcardKey = photo && JSON.stringify([photo,entry.date,message,signature,documentTheme.theme,'light']);
   if (background && (postcardKey ? shell.querySelector('.postcard')?.dataset.key === postcardKey :
     shell.querySelector('.celebration') && shell.dataset.route === String(current.achievement) &&
     shell.dataset.photoLang === current.lang)) return;
+  documentTheme.mode = displayMode(photo || (entry && photoUsesLight(current)));
   document.documentElement.removeAttribute('data-postcard');
   postcardObserver?.disconnect();
   clearTimeout(postcardTimer);
@@ -1587,7 +1720,7 @@ function render({background = false} = {}) {
     shell.innerHTML = `${renderHeader(live,content)}<main><p class="panel notice" role="status">暂时无法读取共读数据，请联网后重试。</p></main>${renderFooter(live,content)}`;
   } else if (current.subpage) {
     if (entry) {
-      if (photo) mountPostcard(live,content,entry,current.lang,photo,message,signature,postcardKey);
+      if (photo) mountPostcard(entry,photo,message,signature,postcardKey);
       else mountPhotoMode(live,content,entry,current.lang);
     } else {
       shell.innerHTML = renderAchievementPage(live,content);
@@ -1602,6 +1735,7 @@ function render({background = false} = {}) {
     }
     animateReadingRings();
   }
+  for (const thumbnail of shell.querySelectorAll('.memory-thumbnail')) mountMemoryImage(thumbnail);
   if (previousRoute !== shell.dataset.route) window.scrollTo(0,current.subpage ? 0 : homeScroll);
 }
 shell.addEventListener('error', (event) => {
@@ -1611,6 +1745,11 @@ shell.addEventListener('error', (event) => {
     return;
   }
   const image = event.target;
+  if (image.matches?.('[data-header-face]')) {
+    image.classList.add('face-failed');
+    const badge = image.closest('.header-badge');
+    if (!badge.querySelector('[data-header-face]:not(.face-failed)')) badge.classList.add('badge-book-only');
+  }
   if (image.matches?.('.photo-avatar-strip img')) {
     if (!image.dataset.retried && navigator.onLine) {
       image.dataset.retried = 'true';
@@ -1729,7 +1868,7 @@ async function loadTheme(registry, preference) {
   const id = /^[a-z][a-z0-9-]*$/.test(preference) &&
     registry?.themes.some((theme) => theme.id === preference) ? preference : 'starmap';
   try {
-    const {data} = await jsonResource(`./themes/${id}/theme.json`, (config) => Boolean(config?.stars));
+    const {data} = await jsonResource(`./themes/${id}/theme.json`, (config) => Boolean(config?.stars?.light && config.stars.dark));
     if (id !== 'starmap' && !document.getElementById(`theme-${id}`)) {
       await new Promise((resolve,reject) => {
         const link = document.createElement('link');
@@ -1828,10 +1967,11 @@ async function start() {
   await update();
 }
 function refreshForeground() {
-  if (document.visibilityState === 'visible' && Date.now() - lastReadAt >= 60000) void update();
+  // The initial load belongs to start(), which waits for Service Worker control.
+  if (lastReadAt && document.visibilityState === 'visible' && Date.now() - lastReadAt >= 60000) void update();
 }
 document.addEventListener('visibilitychange',refreshForeground);
 window.addEventListener('pageshow',refreshForeground);
-window.addEventListener('online',update);
+window.addEventListener('online',() => { if (lastReadAt) void update(); });
 window.addEventListener('offline',() => { state.offline = true; render({background:true}); });
 void start();

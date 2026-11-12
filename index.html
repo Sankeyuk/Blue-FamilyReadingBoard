@@ -1,7 +1,10 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="starmap">
+<html lang="zh-CN" data-theme="starmap" data-mode="light">
 <head>
   <meta charset="utf-8">
+  <script>document.documentElement.dataset.mode = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';</script>
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f5f8">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101827">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="共读星图">
