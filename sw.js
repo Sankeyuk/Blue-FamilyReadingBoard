@@ -1,6 +1,7 @@
 const scope = self.registration.scope;
 const prefix = `coreading:${scope}:`;
-const shellCache = prefix + 'shell-v01-r22';
+const shellVersion = 'r23';
+const shellCache = prefix + 'shell-v01-' + shellVersion;
 const dataCache = prefix + 'live-v1';
 const avatarCache = prefix + 'family-v1';
 const memoryCache = prefix + 'memories-v1';
@@ -27,6 +28,14 @@ self.addEventListener('install',(event) => {
 self.addEventListener('activate',(event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
+    // r22 had no controllerchange handler for shell updates.
+    const legacyWindows = shellVersion === 'r23' && keys.includes(prefix + 'shell-v01-r22')
+      ? (await self.clients.matchAll({type:'window',includeUncontrolled:true})).filter((client) => {
+          const address = new URL(client.url);
+          address.search = '';
+          address.hash = '';
+          return pages.has(address.href);
+        }) : [];
     await Promise.all(keys.filter((key) => key.startsWith(prefix) &&
       ![shellCache,dataCache,avatarCache,memoryCache].includes(key)).map((key) => caches.delete(key)));
     const data = await caches.open(dataCache);
@@ -34,7 +43,12 @@ self.addEventListener('activate',(event) => {
       request.url === url('./assets/family.png') || request.url === url('./assets/reader.png'));
     await Promise.all(oldAvatars.map((request) => data.delete(request)));
     await self.clients.claim();
+    for (const client of legacyWindows) void client.navigate(client.url).catch(() => {});
   })());
+});
+
+self.addEventListener('message',(event) => {
+  if (event.data === 'coreading:shell-version') event.ports[0]?.postMessage(shellVersion);
 });
 
 function liveKey(address) {

@@ -6,6 +6,9 @@ const READING_DAY_MINUTES = 5;
 const BLUE_RING_MINUTES = 30;
 const GOLD_RING_MINUTES = 60;
 const WEEK_GOAL_MINUTES = 210;
+const SHELL_VERSION = 'r23';
+const SHARE_LABELS = {day:'当天',week:'本周',month:'本月',year:'今年'};
+const PUBLIC_BOARD_URL = 'https://sankeyuk.github.io/Blue-FamilyReadingBoard/';
 const fallback = {
   site: {name:'共读星图', short_name:'共读星图', subtitle:'BLUE 家庭共读',
     galaxy_tagline:'一小时一颗星，一起读出一片星空', footer_note:'', theme:'starmap'},
@@ -156,12 +159,10 @@ function randomForStar(index) {
     return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   };
 }
-function renderStars(total, photo = false) {
-  const config = state.theme?.stars;
-  if (!config) return '';
+function starPoints(total, config) {
   const [width, height] = config.viewBox;
   const weights = config.weights.reduce((sum, weight) => sum + weight, 0);
-  const circles = Array.from({length: Math.floor(Math.max(0,total))}, (_, i) => {
+  return Array.from({length: Math.floor(Math.max(0,total))}, (_, i) => {
     const index = i + 1;
     const random = randomForStar(index);
     const x = (0.035 + random() * 0.93) * width;
@@ -173,8 +174,15 @@ function renderStars(total, photo = false) {
       || config.colors[0];
     const radius = gold ? config.goldRadius : config.radius[0] + random() * (config.radius[1] - config.radius[0]);
     const opacity = gold ? 1 : 0.38 + random() * 0.62;
-    return `<circle class="${gold ? 'gold-star' : 'star'}" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${radius.toFixed(2)}" ${gold ? '' : `fill="${esc(color)}"`} opacity="${(photo ? opacity * .6 : opacity).toFixed(2)}"/>`;
-  }).join('');
+    return {x,y,gold,color,radius,opacity};
+  });
+}
+function renderStars(total, photo = false) {
+  const config = state.theme?.stars;
+  if (!config) return '';
+  const [width,height] = config.viewBox;
+  const circles = starPoints(total,config).map(({x,y,gold,color,radius,opacity}) =>
+    `<circle class="${gold ? 'gold-star' : 'star'}" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${radius.toFixed(2)}" ${gold ? '' : `fill="${esc(color)}"`} opacity="${(photo ? opacity * .6 : opacity).toFixed(2)}"/>`).join('');
   return `<svg class="stars" viewBox="0 0 ${width} ${height}" preserveAspectRatio="${photo ? 'none' : 'xMidYMid slice'}" aria-hidden="true">${circles}</svg>`;
 }
 function renderGalaxy(live, content) {
@@ -300,6 +308,17 @@ async function syncToday() {
   }
 }
 
+function shareEntry(type) {
+  return `<a class="share-entry" href="#share/${type}" aria-label="分享${SHARE_LABELS[type]}">
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.65"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 15V3m-4 4 4-4 4 4M7 10H5v10h14V10h-2"/>
+    </svg></a>`;
+}
+function shareHeading(title, type, meta = '') {
+  return `<div class="heading has-share"><h2>${title}</h2><div class="heading-actions">${meta}${shareEntry(type)}</div></div>`;
+}
+
 function renderToday(live) {
   const {today, yesterday} = live;
   const stale = live.fetched_at && today.date > live.fetched_at.slice(0,10);
@@ -309,8 +328,8 @@ function renderToday(live) {
     <span aria-hidden="true">${dayRing(day.minutes,current)}</span>
     <div><b>${label}</b><p><strong>${n(Math.floor(day.minutes))}</strong> 分钟</p></div></div>`;
   return `<section class="panel today" data-rings="today">
-    <div class="heading"><h2>今天</h2><div class="today-actions">${dateHTML(today.date, shortDate(today.date))}
-      <span class="sync-result" role="status"></span><button class="sync-button" type="button"><span aria-hidden="true">↻</span> 同步</button></div></div>
+    ${shareHeading('今天','day',`<div class="today-actions">${dateHTML(today.date, shortDate(today.date))}
+      <span class="sync-result" role="status"></span><button class="sync-button" type="button"><span aria-hidden="true">↻</span> 同步</button></div>`)}
     <div class="today-columns${yesterday ? ' has-yesterday' : ''}">${yesterday ? column(yesterday,'昨天',false) : ''}
       ${column(today,'今天',true)}</div>
     <p class="today-note">${note}</p>
@@ -374,13 +393,16 @@ function playBeanRoad() {
   setTimeout(() => road.querySelectorAll('.road-passed').forEach((bean) => bean.remove()),duration);
 }
 
-function comparison(current, prior, label, monthly = false) {
-  if (!prior?.days_elapsed) return `<p class="compare">${label}暂无数据</p>`;
+function comparisonText(current, prior, label, monthly = false) {
+  if (!prior?.days_elapsed) return `${label}暂无数据`;
   const diff = Math.round((current.total_minutes - prior.total_minutes) * 100) / 100;
   const change = Math.floor(Math.abs(diff)) ? `${diff > 0 ? '+' : '−'}${minutesLabel(Math.abs(diff))}` : '时长持平';
   const reference = monthly ? `${prior.record_days} 天 · 覆盖率 ${p(prior.coverage)}` :
     `${prior.record_days} 天 · ${minutesLabel(prior.total_minutes)}`;
-  return `<p class="compare">${label} ${reference} · ${change}</p>`;
+  return `${label} ${reference} · ${change}`;
+}
+function comparison(...args) {
+  return `<p class="compare">${comparisonText(...args)}</p>`;
 }
 
 function renderWeek(live) {
@@ -403,7 +425,7 @@ function renderWeek(live) {
       ${dayRing(minutes,today)}<span>${day}</span></button>`;
   }).join('');
   return `<section class="panel week" data-rings="week">
-    ${heading('本周进度',`<span>${dayMonth(first)} – ${dayMonth(last)}</span>`)}
+    ${shareHeading('本周进度','week',`<span>${dayMonth(first)} – ${dayMonth(last)}</span>`)}
     <div class="week-progress">
       <div>${readingRing(week.total_minutes / WEEK_GOAL_MINUTES,`<b>${duration}</b><small>本周时长</small>`)}
         <p>目标 ${WEEK_GOAL_MINUTES} 分钟（3.5 小时）</p></div>
@@ -441,7 +463,7 @@ function renderYears(live, content) {
   }).filter(({year}) => year >= firstReadingYear(live));
   const max = Math.max(1, ...years.map((year) => year.total));
   const current = live.data_through.slice(0,4);
-  return `<section class="panel annual">${heading('每年共读','<span>小时</span>')}
+  return `<section class="panel annual">${shareHeading('每年共读','year','<span>小时</span>')}
     <div class="annual-chart">${years.map(({year,total}) => `<div class="year-col ${year === current ? 'current-year' : ''}">
       <div class="year-track"><div class="year-fill ${total === 0 ? 'zero-year' : ''}" style="height:${total / max * 100}%"><b>${n(Math.floor(total))}</b></div></div>
       <span>${esc(year)}</span></div>`).join('')}</div></section>`;
@@ -539,7 +561,7 @@ function renderHeatmap(live) {
   const summary = `<p class="heat-month-summary">本月 ${month.record_days} 天 · 覆盖率 ${p(month.coverage)}</p>
     ${comparison(month,month.prev_same_period,'上月同期',true)}`;
   if (!live.minutes_by_year || !live.years) {
-    return `<section class="panel heatmap">${heading('共读热力图')}
+    return `<section class="panel heatmap">${shareHeading('共读热力图','month')}
       <p class="heat-updating">数据更新中</p>${summary}</section>`;
   }
   const availableYears = Object.keys(live.minutes_by_year).sort();
@@ -581,9 +603,8 @@ function renderHeatmap(live) {
   }).join('');
   const stats = live.years[heatmapYear];
   return `<section class="panel heatmap">
-    <div class="heading heat-heading"><h2>${year} 年 · 共读热力图</h2>
-      <div class="heat-year-tabs" role="group" aria-label="热力图年份">${availableYears.map((y) =>
-        `<button type="button" data-heat-year="${y}" aria-pressed="${y === heatmapYear}">${y}</button>`).join('')}</div></div>
+    ${shareHeading(`${year} 年 · 共读热力图`,'month',`<div class="heat-year-tabs" role="group" aria-label="热力图年份">${availableYears.map((y) =>
+      `<button type="button" data-heat-year="${y}" aria-pressed="${y === heatmapYear}">${y}</button>`).join('')}</div>`)}
     <p class="heat-statistics">共读 ${stats.record_days} 天 · 读满 30 分钟 ${stats.days_30} 天</p>
     <p class="reading-detail heat-detail" role="status"></p>
     <div class="heat-frame">
@@ -896,18 +917,349 @@ function postcardMessage(content, entry) {
   return pool[sum % pool.length].replaceAll('{n}',String(value)).replaceAll('{unit}',dayBased ? '天' : '小时');
 }
 
-function postcardLines(ctx, text, width) {
-  const lines = [];
-  let line = '';
-  for (const char of text) {
-    if (char === '\n' || (line && ctx.measureText(line + char).width > width)) {
-      lines.push(line.trimEnd());
-      line = '';
+function canvasLines(ctx, text, width) {
+  return text.split('\n').flatMap((paragraph) => {
+    const lines = [];
+    let line = '';
+    for (const char of paragraph) {
+      if (line && ctx.measureText(line + char).width > width) {
+        lines.push(line.trimEnd());
+        line = '';
+      }
+      line += char;
     }
-    if (char !== '\n') line += char;
+    lines.push(line.trimEnd());
+    const last = lines.length - 1;
+    if (last > 0 && /^\p{L}[\p{P}\s]*$/u.test(lines[last].trimStart())) {
+      const previous = lines[last - 1].match(/^(.+?)(\p{L}[\p{P}\s]*)$/u);
+      if (previous && ctx.measureText(previous[2] + lines[last]).width <= width) {
+        lines[last - 1] = previous[1].trimEnd();
+        lines[last] = previous[2] + lines[last];
+      }
+    }
+    return lines;
+  });
+}
+
+function canvasPNG(canvas) {
+  // Keep the click's transient activation for the iPhone share sheet.
+  const encoded = canvas.toDataURL('image/png').split(',')[1];
+  return new Blob([Uint8Array.from(atob(encoded), char => char.charCodeAt(0))],{type:'image/png'});
+}
+
+function canShareImage(file) {
+  return Boolean(navigator.share && navigator.canShare?.({files:[file]}));
+}
+function shareImage(file) {
+  if (canShareImage(file)) navigator.share({files:[file]}).catch(() => {});
+}
+function saveImage(file, container) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  link.hidden = true;
+  container.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url),1000);
+}
+
+const shareCardCache = new Map();
+let shareCardRevision;
+
+function sharedDay(live, selection) {
+  if (selection === 'today' || !live.yesterday) return 'today';
+  return selection === 'yesterday' || !live.today.read ? 'yesterday' : 'today';
+}
+
+function yesterdayStreak(live) {
+  if (live.today.read) return Math.max(0,live.streak.current - 1);
+  if (live.today.is_partial) return live.streak.current;
+  let streak = 0;
+  const start = dateValue(live.yesterday.date);
+  for (let date = live.yesterday.date; ; date = offsetDate(start,-streak)) {
+    const year = date.slice(0,4);
+    const index = Math.round((dateValue(date) - dateValue(year + '-01-01')) / 86400000);
+    if (!(live.minutes_by_year?.[year]?.[index] > 0)) return streak;
+    streak++;
   }
-  if (line) lines.push(line.trimEnd());
-  return lines;
+}
+
+function shareCardImage(live, site, type, day) {
+  const width = 360;
+  const height = 480;
+  const middle = width / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = width * 3;
+  canvas.height = height * 3;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(3,3);
+  const style = getComputedStyle(document.documentElement);
+  const token = (key) => style.getPropertyValue('--ds-' + key).trim();
+  const font = token('font');
+  const ink = token('hero-text');
+  const secondary = token('text');
+  const blue = token('accent');
+  const gold = token('gold');
+  const strong = token('weight-strong');
+  const heatColors = levels.map((_,i) => token(`level-${i}`));
+  const alt = [site.name];
+  const setFont = (size, weight) => { ctx.font = `${weight} ${size}px ${font}`; };
+  const label = (text, x, y, size = 11, weight = 400, color = secondary, maxWidth = 302) => {
+    setFont(size,weight);
+    ctx.fillStyle = color;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.fillText(text,x,y,maxWidth);
+  };
+  const copy = (text, y, size = 11, weight = 400, color = secondary) => {
+    setFont(size,weight);
+    const lines = canvasLines(ctx,text,288);
+    lines.forEach((line,i) => label(line,middle,y + i * (size + 4),size,weight,color,288));
+    alt.push(text);
+    return lines.length * (size + 4);
+  };
+  const ring = (x, y, radius, fraction, lineWidth, color = blue) => {
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = token('line');
+    ctx.beginPath();
+    ctx.arc(x,y,radius,0,Math.PI * 2);
+    ctx.stroke();
+    if (fraction > 0) {
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      ctx.arc(x,y,radius,-Math.PI / 2,Math.PI * 2 * Math.min(fraction,1) - Math.PI / 2);
+      ctx.stroke();
+    }
+  };
+  const tile = (x, y, size, level) => {
+    ctx.fillStyle = heatColors[level] || heatColors[0];
+    ctx.beginPath();
+    ctx.roundRect(x,y,size,size,Math.min(3,size / 4));
+    ctx.fill();
+  };
+  const heatLegend = (y) => levels.forEach((level,i) => {
+    const x = 40 + i * 73;
+    tile(x,y - 4,8,i);
+    label(level,x + 32,y,9,400,secondary,51);
+  });
+  const metric = (value, caption, x, y, unit = '') => {
+    label(`${value}${unit ? ' ' + unit : ''}`,x,y,22,strong,ink,91);
+    label(caption,x,y + 24,10);
+    alt.push(`${caption} ${value}${unit}`);
+  };
+
+  const background = ctx.createLinearGradient(35,0,325,height);
+  background.addColorStop(0,token('surface'));
+  background.addColorStop(.52,token('accent-soft'));
+  background.addColorStop(1,token('hero-line'));
+  ctx.fillStyle = background;
+  ctx.fillRect(0,0,width,height);
+  const stars = state.theme?.stars;
+  if (stars) {
+    const [starWidth,starHeight] = stars.viewBox;
+    ctx.save();
+    const margins = new Path2D();
+    margins.rect(0,0,width,height);
+    margins.rect(24,26,312,428);
+    ctx.clip(margins,'evenodd');
+    for (const point of starPoints(live.lifetime.total_hours,stars)) {
+      ctx.fillStyle = point.gold ? token('hero-gold') : point.color;
+      ctx.globalAlpha = point.opacity * .55;
+      ctx.beginPath();
+      ctx.arc(point.x * width / starWidth,point.y * height / starHeight,point.radius,0,Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.strokeStyle = token('hero-line');
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(13,13,334,454,15);
+  ctx.stroke();
+  label(site.name,middle,40,12,strong);
+  const through = live.data_through;
+  const year = through.slice(0,4);
+
+  if (type === 'day') {
+    const selected = live[day];
+    const subtractToday = day === 'yesterday' && live.today.read;
+    const streak = day === 'yesterday' ? yesterdayStreak(live) : live.streak.current;
+    const recordDays = live.lifetime.record_days - Number(subtractToday);
+    const totalHours = Math.max(0,live.lifetime.total_hours - (subtractToday ? live.today.minutes / 60 : 0));
+    copy(`${shortDate(selected.date)} · ${weekdayLabel(selected.date)}`,80,25,strong,ink);
+    ring(middle,211,75,selected.minutes / BLUE_RING_MINUTES,10,selected.minutes >= GOLD_RING_MINUTES ? gold : blue);
+    const minutes = n(Math.floor(selected.minutes));
+    label(minutes,middle,205,50,strong,ink);
+    label('分钟',middle,241,14);
+    alt.push(`${minutes} 分钟`);
+    metric(n(streak),'连续共读',70,340,'天');
+    if (selected.minutes > 0 || (day === 'today' && live.today.read)) {
+      label(n(recordDays),middle,340,22,strong,ink);
+      label(`第 ${n(recordDays)} 个共读日`,middle,364,10);
+      alt.push(`第 ${n(recordDays)} 个共读日`);
+    } else {
+      metric(n(recordDays),'累计共读日',middle,340);
+    }
+    metric(n(totalHours),'累计共读',290,340,'小时');
+  } else if (type === 'week') {
+    const {week} = live;
+    const [start,end] = week.range;
+    const count = weekReadingDays(live);
+    const minutes = Math.floor(week.total_minutes);
+    const duration = minutes < GOLD_RING_MINUTES ? `${n(minutes)} 分` :
+      `${n(Math.floor(minutes / GOLD_RING_MINUTES))} 时 ${minutes % GOLD_RING_MINUTES} 分`;
+    copy(`${dayMonth(start)} – ${dayMonth(end)} · 第 ${Number(week.period.split('W')[1])} 周`,80,23,strong,ink);
+    ring(108,185,57,week.total_minutes / WEEK_GOAL_MINUTES,8);
+    ring(252,185,57,count / 7,8);
+    label(duration,108,180,20,strong,ink,95);
+    label('本周时长',108,205,11);
+    label(`${count}/7 天`,252,180,22,strong,ink);
+    label('阅读日',252,205,11);
+    alt.push(`本周时长 ${duration}`,`阅读日 ${count}/7 天`);
+    label(`目标 ${WEEK_GOAL_MINUTES} 分钟`,108,262,10);
+    label(`读满 ${READING_DAY_MINUTES} 分钟算一天`,252,262,10);
+    const minutesByDay = new Map(week.days.map(({date,minutes}) => [date,minutes]));
+    weekdays.forEach((weekday,i) => {
+      const date = offsetDate(dateValue(start),i);
+      const minutes = date > through ? 0 : minutesByDay.get(date) ?? 0;
+      const x = 51 + i * 43;
+      ring(x,314,14,minutes / BLUE_RING_MINUTES,3,minutes >= GOLD_RING_MINUTES ? gold : blue);
+      label(minutes >= READING_DAY_MINUTES ? '✓' : date === through && !minutes ? '今' : '',x,314,10,strong);
+      label(weekday,x,340,11);
+    });
+    copy(comparisonText(week,week.prev_same_period,'上周同期'),376);
+  } else if (type === 'month') {
+    const {month} = live;
+    const [first,last] = month.range;
+    const start = dateValue(first);
+    const offset = (start.getUTCDay() + 6) % 7;
+    copy(`${year} 年 ${Number(first.slice(5,7))} 月`,80,26,strong,ink);
+    weekdays.forEach((weekday,i) => label(weekday,57 + i * 41,122,10));
+    const dayLevels = new Map(month.calendar.map(({date,level}) => [date,level]));
+    for (let i = 0; i < Number(last.slice(8)); i++) {
+      const index = i + offset;
+      const x = 42 + index % 7 * 41;
+      const y = 136 + Math.floor(index / 7) * 25;
+      const date = offsetDate(start,i);
+      if (date <= through) tile(x,y,22,dayLevels.get(date));
+      label(String(i + 1),x + 11,y + 11,10,400,date <= through ? ink : secondary);
+    }
+    heatLegend(298);
+    metric(n(month.record_days),'本月共读',70,332,'天');
+    metric(p(month.coverage),'覆盖率',middle,332);
+    metric(n(month.total_hours),'本月时长',290,332,'小时');
+    copy(comparisonText(month,month.prev_same_period,'上月同期',true),379);
+  } else {
+    copy(`${year} 年`,80,28,strong,ink);
+    const stats = live.years?.[year];
+    const minutes = live.minutes_by_year?.[year];
+    if (!stats || !minutes) {
+      copy('数据更新中',221,22,strong,ink);
+    } else {
+      const start = dateValue(`${year}-01-01`);
+      const offset = (start.getUTCDay() + 6) % 7;
+      const since = Math.max(0,Math.round((dateValue(live.lifetime.since) - start) / 86400000));
+      const step = 5.62;
+      const left = 32;
+      minutes.forEach((value,i) => {
+        const date = offsetDate(start,i);
+        const column = Math.floor((i + offset) / 7);
+        const x = left + column * step;
+        if (date.endsWith('-01') && [1,3,5,7,9,11].includes(Number(date.slice(5,7)))) {
+          label(`${Number(date.slice(5,7))} 月`,x + 6,151,9);
+        }
+        if (value !== null && date <= through) {
+          tile(x,167 + (i + offset) % 7 * step,4.7,live.levels_by_year[year]?.[i - since]);
+        }
+      });
+      heatLegend(228);
+      label(n(stats.total_hours),middle,287,48,strong,ink);
+      label('今年共读 · 小时',middle,323,12);
+      alt.push(`今年 ${n(stats.total_hours)} 小时`);
+      metric(n(stats.record_days),'共读',108,359,'天');
+      metric(n(stats.days_30),'读满 30 分钟',252,359,'天');
+    }
+  }
+  ctx.strokeStyle = token('hero-line');
+  ctx.lineWidth = 1;
+  ctx.lineCap = 'butt';
+  ctx.beginPath();
+  ctx.moveTo(36,400);
+  ctx.lineTo(324,400);
+  ctx.stroke();
+  // Fit the signature above the date while sharing the postcard's wrapping rules.
+  if (site.share_signature) {
+    let size = 10;
+    setFont(size,400);
+    while (canvasLines(ctx,site.share_signature,288).length > 2 && size > 5) setFont(--size,400);
+    const lines = canvasLines(ctx,site.share_signature,288);
+    const lineHeight = Math.min(size + 4,24 / lines.length);
+    lines.forEach((line,i) => label(line,middle,413 + i * lineHeight,size,400,secondary,288));
+    alt.push(site.share_signature);
+  }
+  copy(`数据截至 ${shortDate(through)}`,site.share_signature ? 440 : 423,10);
+  if (site.share_show_url) copy(PUBLIC_BOARD_URL,453,9);
+  return {blob:canvasPNG(canvas),description:alt.join(' · ')};
+}
+
+function cachedShareCard(live, site, type, day) {
+  const revision = JSON.stringify([live.data_through,live.fetched_at,live.generated_at,
+    document.documentElement.dataset.theme,site.name,site.share_signature,site.share_show_url]);
+  if (shareCardRevision !== revision) {
+    for (const {url} of shareCardCache.values()) URL.revokeObjectURL(url);
+    shareCardCache.clear();
+    shareCardRevision = revision;
+  }
+  const key = type === 'day' ? day : type;
+  if (!shareCardCache.has(key)) {
+    const {blob,description} = shareCardImage(live,site,type,day);
+    const date = type === 'day' ? live[day].date : live.data_through;
+    const file = new File([blob],`${site.name}-${SHARE_LABELS[type]}-${date}.png`,{type:'image/png'});
+    shareCardCache.set(key,{file,description,url:URL.createObjectURL(file)});
+  }
+  return shareCardCache.get(key);
+}
+
+function mountSharePage(live, site, type, daySelection) {
+  const day = live && sharedDay(live,daySelection);
+  const isDay = type === 'day';
+  const address = `#share/day?d=${day}`;
+  if (isDay && day && location.hash !== address) history.replaceState(history.state,'',address);
+  const tabs = Object.entries(SHARE_LABELS).map(([key,label]) =>
+    `<a href="#share/${key}"${key === type ? ' aria-current="page"' : ''}>${label}</a>`).join('');
+  shell.innerHTML = `${backBar()}<main class="share-page">
+    <nav class="share-tabs" aria-label="分享卡类型">${tabs}</nav>
+    ${isDay && live ? `<nav class="share-tabs share-days" aria-label="选择共读日">
+      <a href="#share/day?d=today"${day === 'today' ? ' aria-current="page"' : ''}>今天</a>
+      ${live.yesterday ? `<a href="#share/day?d=yesterday"${day === 'yesterday' ? ' aria-current="page"' : ''}>昨天</a>` : ''}</nav>` : ''}
+    ${live ? `<img class="share-preview" width="1080" height="1440" alt="" hidden>
+      <p class="panel notice share-status" role="status">正在生成分享卡…</p>
+      <div class="share-actions">
+        <button class="postcard-control share-send" type="button" hidden>分享</button>
+        <button class="postcard-control share-save" type="button" disabled>保存图片</button>
+      </div>` : '<p class="panel notice" role="status">暂时无法读取共读数据，请联网后重试。</p>'}
+  </main>`;
+  if (!live) return;
+  const panel = shell.querySelector('.share-page');
+  const status = panel.querySelector('.share-status');
+  document.fonts.ready.then(() => {
+    if (!panel.isConnected) return;
+    const {file,description,url} = cachedShareCard(live,site,type,day);
+    const image = panel.querySelector('.share-preview');
+    image.alt = description;
+    image.src = url;
+    image.hidden = false;
+    status.hidden = true;
+    const save = panel.querySelector('.share-save');
+    const share = panel.querySelector('.share-send');
+    save.disabled = false;
+    share.hidden = !canShareImage(file);
+    save.addEventListener('click',() => saveImage(file,panel));
+    share.addEventListener('click',() => shareImage(file));
+  }).catch(() => { status.textContent = '暂时无法生成分享卡，请稍后重试。'; });
 }
 
 function postcardImage(image, entry, message, signature, orientation) {
@@ -961,7 +1313,7 @@ function postcardImage(image, entry, message, signature, orientation) {
   const fixedHeight = numberSize + dateHeight + signatureHeight + gap * (signature ? 3 : 2);
   do {
     ctx.font = `${strong} ${messageSize}px ${font}`;
-    lines = postcardLines(ctx,message,textWidth);
+    lines = message ? canvasLines(ctx,message,textWidth) : [];
     if (lines.length * messageSize * 1.4 <= textHeight - fixedHeight) break;
     messageSize *= .9;
   } while (messageSize > 1);
@@ -993,9 +1345,7 @@ function postcardImage(image, entry, message, signature, orientation) {
     ctx.font = `400 10px ${font}`;
     ctx.fillText(signature,left,y+dateHeight+gap+signatureHeight/2,textWidth);
   }
-  // Keep the click's transient activation for the iPhone share sheet.
-  const encoded = canvas.toDataURL('image/png').split(',')[1];
-  return new Blob([Uint8Array.from(atob(encoded), char => char.charCodeAt(0))],{type:'image/png'});
+  return canvasPNG(canvas);
 }
 
 function mountPhotoMode(live, content, entry, lang) {
@@ -1053,9 +1403,7 @@ function mountPostcard(live, content, entry, lang, source, message, signature, k
   const save = panel.querySelector('.postcard-save');
   const share = panel.querySelector('.postcard-share');
   const filename = `coreading-${memoryKey(entry)}.png`;
-  share.hidden = !(navigator.share && navigator.canShare?.({files:[
-    new File([new Uint8Array([137,80,78,71])],filename,{type:'image/png'}),
-  ]}));
+  share.hidden = !canShareImage(new File([new Uint8Array([137,80,78,71])],filename,{type:'image/png'}));
   const setControls = (visible) => {
     controls.setAttribute('aria-hidden',String(!visible));
     controls.inert = !visible;
@@ -1091,21 +1439,8 @@ function mountPostcard(live, content, entry, lang, source, message, signature, k
     const orientation = matchMedia('(orientation: landscape)').matches ? 'landscape' : 'portrait';
     return new File([postcardImage(image,entry,message,signature,orientation)],filename,{type:'image/png'});
   };
-  save.addEventListener('click',() => {
-    const url = URL.createObjectURL(exportFile());
-    const download = document.createElement('a');
-    download.href = url;
-    download.download = filename;
-    download.hidden = true;
-    panel.append(download);
-    download.click();
-    download.remove();
-    setTimeout(() => URL.revokeObjectURL(url),1000);
-  });
-  share.addEventListener('click',() => {
-    const files = [exportFile()];
-    if (navigator.canShare({files})) navigator.share({files}).catch(() => {});
-  });
+  save.addEventListener('click',() => saveImage(exportFile(),panel));
+  share.addEventListener('click',() => shareImage(exportFile()));
 
   const fit = () => { if (panel.isConnected) fitPostcardCopy(copy); };
   postcardObserver = new ResizeObserver(fit);
@@ -1203,10 +1538,11 @@ function route() {
     Number.isSafeInteger(value) && value > 0 && value % (isDay ? 100 : 50) === 0 ? requested : null;
   const lang = search.get('lang') === 'en' ? 'en' : 'zh';
   const page = path === 'about' || path === 'changelog' ? path : null;
+  const share = path.match(/^share\/(day|week|month|year)$/)?.[1];
   const match = path.match(/^achievements(?:\/(d?\d+))?$/);
-  const achievement = match?.[1] ?? (match || page ? null : preview);
-  return {preview, lang, page, achievement, photoMode:hashSearch.get('photo') === '1',
-    subpage:Boolean(page || match || achievement)};
+  const achievement = match?.[1] ?? (match || page || share ? null : preview);
+  return {preview, lang, page, share, daySelection:hashSearch.get('d'), achievement, photoMode:hashSearch.get('photo') === '1',
+    subpage:Boolean(page || share || match || achievement)};
 }
 function render({background = false} = {}) {
   const {live,content} = state;
@@ -1240,11 +1576,13 @@ function render({background = false} = {}) {
   delete shell.dataset.photoLang;
   const previousRoute = shell.dataset.route;
   shell.dataset.page = current.subpage ? 'detail' : 'home';
-  shell.dataset.route = current.subpage ? String(current.page ?? current.achievement ?? 'achievements') : 'home';
+  shell.dataset.route = current.subpage ? String(current.page ?? (current.share && `share/${current.share}`) ?? current.achievement ?? 'achievements') : 'home';
   document.title = content.site.name;
   document.querySelector('meta[name="apple-mobile-web-app-title"]').content = content.site.short_name || content.site.name;
   if (current.page) {
     shell.innerHTML = current.page === 'about' ? renderAbout(live,content) : renderChangelog(live,content);
+  } else if (current.share) {
+    mountSharePage(live,content.site,current.share,current.daySelection);
   } else if (!live) {
     shell.innerHTML = `${renderHeader(live,content)}<main><p class="panel notice" role="status">暂时无法读取共读数据，请联网后重试。</p></main>${renderFooter(live,content)}`;
   } else if (current.subpage) {
@@ -1337,7 +1675,7 @@ shell.addEventListener('click', (event) => {
     address.hash = '';
     history.pushState(null,'',address);
     render();
-  } else if (link && /^#(?:achievements|about|changelog|diary)/.test(link.hash) && shell.dataset.page === 'home') {
+  } else if (link && /^#(?:achievements|about|changelog|diary|share\/)/.test(link.hash) && shell.dataset.page === 'home') {
     homeScroll = window.scrollY;
   }
 });
@@ -1437,6 +1775,28 @@ async function update() {
     scheduleFamilyWarmup();
   }
 }
+let shellReloading = false;
+function checkShellVersion(controller) {
+  if (!controller || shellReloading) return;
+  const channel = new MessageChannel();
+  const port = channel.port1;
+  const timer = setTimeout(() => port.close(),3000);
+  port.onmessage = ({data:version}) => {
+    clearTimeout(timer);
+    port.close();
+    if (shellReloading || controller !== navigator.serviceWorker.controller ||
+        !/^r\d+$/.test(version) || version === SHELL_VERSION) return;
+    const key = 'coreading:shell-reload';
+    try {
+      if (sessionStorage.getItem(key) === version) return;
+      sessionStorage.setItem(key,version);
+    } catch {}
+    shellReloading = true;
+    location.reload();
+  };
+  controller.postMessage('coreading:shell-version',[channel.port2]);
+}
+
 async function start() {
   analyticsEligible = analyticsAllowed();
   if ('serviceWorker' in navigator) {
@@ -1444,6 +1804,9 @@ async function start() {
     worker.addEventListener('controllerchange',scheduleFamilyWarmup);
     const workerURL = new URL('./sw.js',location.href).href;
     const controlled = () => worker.controller?.scriptURL === workerURL;
+    worker.addEventListener('controllerchange',() => {
+      if (controlled()) checkShellVersion(worker.controller);
+    });
     const register = worker.register('./sw.js').catch(() => null);
     if (!controlled()) {
       let listener, timer;
