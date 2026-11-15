@@ -1,12 +1,12 @@
 {
  "schema_version": 1,
- "generated_at": "2026-11-15T21:37:56+08:00",
- "fetched_at": "2026-11-15T21:37:51+08:00",
+ "generated_at": "2026-11-15T21:48:25+08:00",
+ "fetched_at": "2026-11-15T21:48:19+08:00",
  "data_through": "2026-11-15",
  "today": {
   "date": "2026-11-15",
   "weekday": 7,
-  "minutes": 13.9,
+  "minutes": 20.68,
   "level": 1,
   "read": true,
   "is_partial": true
@@ -35,9 +35,9 @@
   "days_elapsed": 7,
   "record_days": 7,
   "coverage": 1.0,
-  "total_minutes": 327.9,
-  "total_hours": 5.46,
-  "avg_per_day": 46.84,
+  "total_minutes": 334.68,
+  "total_hours": 5.58,
+  "avg_per_day": 47.81,
   "days_30": 4,
   "days_60": 3,
   "is_partial": false,
@@ -81,7 +81,7 @@
    {
     "date": "2026-11-15",
     "weekday": 7,
-    "minutes": 13.9,
+    "minutes": 20.68,
     "level": 1
    }
   ],
@@ -107,9 +107,9 @@
   "days_elapsed": 15,
   "record_days": 15,
   "coverage": 1.0,
-  "total_minutes": 862.15,
-  "total_hours": 14.37,
-  "avg_per_day": 57.48,
+  "total_minutes": 868.93,
+  "total_hours": 14.48,
+  "avg_per_day": 57.93,
   "days_30": 11,
   "days_60": 9,
   "is_partial": true,
@@ -201,7 +201,7 @@
    {
     "date": "2026-11-15",
     "weekday": 7,
-    "minutes": 13.9,
+    "minutes": 20.68,
     "level": 1
    }
   ],
@@ -221,19 +221,19 @@
  "lifetime": {
   "since": "2023-09-17",
   "first_record": "2024-01-12",
-  "total_hours": 301.56,
+  "total_hours": 301.67,
   "record_days": 461
  },
  "next": {
   "next_milestone_hours": 350,
   "next_milestone_kind": "minor",
-  "hours_to_milestone": 48.44,
+  "hours_to_milestone": 48.33,
   "next_milestone_eta": "2027-01-02",
   "next_milestone_celebration": "第 350 小时：由孩子挑一本新书，晚饭时一家人说说这一阶段最喜欢的一本",
   "next_major_hours": 400,
-  "hours_to_major": 98.44,
+  "hours_to_major": 98.33,
   "next_major_eta": "2027-02-20",
-  "pace_hours_per_day": 1.015,
+  "pace_hours_per_day": 1.019,
   "pace_days": 28
  },
  "roadmap": [
@@ -315,7 +315,7 @@
    "reached": null,
    "days_since_prev": null,
    "is_next": false,
-   "eta": "2027-04-11",
+   "eta": "2027-04-10",
    "celebration": "第 450 小时：由孩子挑一本新书，晚饭时一家人说说这一阶段最喜欢的一本"
   },
   {
@@ -324,7 +324,7 @@
    "reached": null,
    "days_since_prev": null,
    "is_next": false,
-   "eta": "2027-05-30",
+   "eta": "2027-05-29",
    "celebration": "第 500 小时：由孩子挑一本新书，再拍一张「我们读了 500 小时」的全家合照"
   }
  ],
@@ -528,7 +528,7 @@
   },
   {
    "month": "2026-11",
-   "cum_hours": 301.56
+   "cum_hours": 301.67
   }
  ],
  "levels_by_year": {
@@ -1592,7 +1592,7 @@
    76.5,
    28.3,
    24.8,
-   13.9,
+   20.7,
    null,
    null,
    null,
@@ -1653,7 +1653,7 @@
    "days_30": 23
   },
   "2026": {
-   "total_hours": 243.55,
+   "total_hours": 243.66,
    "record_days": 297,
    "days_30": 233
   }
