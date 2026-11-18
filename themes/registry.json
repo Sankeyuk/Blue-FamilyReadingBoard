@@ -1,1 +1,16 @@
-{"themes":[{"id":"starmap","name":"星图","description":"蓝色星空与金色里程碑","thumbnail":"starmap/assets/thumbnail.svg"}]}
+{
+  "themes": [
+    {
+      "id": "starmap",
+      "name": "星图",
+      "description": "蓝色星空与金色里程碑",
+      "thumbnail": "starmap/assets/thumbnail.svg"
+    },
+    {
+      "id": "christmas",
+      "name": "圣诞",
+      "description": "暖白、圣诞红与松绿，雪代替星星",
+      "thumbnail": "christmas/assets/thumbnail.svg"
+    }
+  ]
+}

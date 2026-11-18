@@ -2,9 +2,17 @@
 <html lang="zh-CN" data-theme="starmap" data-mode="light">
 <head>
   <meta charset="utf-8">
-  <script>document.documentElement.dataset.mode = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';</script>
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f5f8">
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101827">
+  <script id="skin-config" type="application/json">{"default": "starmap", "ids": ["starmap", "christmas"]}</script>
+  <script>
+    const initialSkinConfig = JSON.parse(document.getElementById('skin-config').textContent);
+    let storedSkin;
+    try { storedSkin = localStorage.getItem('coreading:skin'); } catch {}
+    const requestedSkin = new URLSearchParams(location.search).get('theme');
+    document.documentElement.dataset.theme = [requestedSkin,storedSkin,initialSkinConfig.default]
+      .find((id) => initialSkinConfig.ids.includes(id)) || initialSkinConfig.ids[0];
+    document.documentElement.dataset.mode = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';</script>
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="共读星图">
@@ -12,8 +20,26 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
-  <link rel="stylesheet" href="./themes/starmap/theme.css">
+  <!-- skin styles -->
+  <link rel="stylesheet" id="theme-starmap" href="./themes/starmap/theme.css">
+  <link rel="stylesheet" id="theme-christmas" href="./themes/christmas/theme.css">
+  <!-- end skin styles -->
   <link rel="stylesheet" href="./style.css">
+  <script>
+    function syncThemeColors() {
+      const sample = document.createElement('div');
+      sample.hidden = true;
+      sample.dataset.theme = document.documentElement.dataset.theme;
+      document.documentElement.append(sample);
+      for (const mode of ['light','dark']) {
+        sample.dataset.mode = mode;
+        document.querySelector(`meta[name="theme-color"][media="(prefers-color-scheme: ${mode})"]`).content =
+          getComputedStyle(sample).getPropertyValue('--ds-page-bg').trim();
+      }
+      sample.remove();
+    }
+    syncThemeColors();
+  </script>
   <script defer src="./app.js"></script>
 </head>
 <body>

@@ -1,6 +1,6 @@
 const scope = self.registration.scope;
 const prefix = `coreading:${scope}:`;
-const shellVersion = 'r26';
+const shellVersion = 'r27';
 const shellCache = prefix + 'shell-v01-' + shellVersion;
 const dataCache = prefix + 'live-v1';
 const avatarCache = prefix + 'family-v1';
@@ -12,6 +12,8 @@ const memoryIndex = url('./memories.json');
 const legacyAvatarPrefix = url('./assets/celebration-avatars/');
 const shell = new Set([
   './','./index.html','./style.css','./app.js',
+  './themes/registry.json','./themes/christmas/theme.css','./themes/christmas/theme.json',
+  './themes/christmas/assets/holly-light.svg','./themes/christmas/assets/holly-dark.svg','./themes/christmas/assets/thumbnail.svg',
   './themes/starmap/theme.css','./themes/starmap/theme.json','./themes/starmap/assets/Inter-Variable.ttf','./assets/icon-192.png',
 ].map(url));
 const pages = new Set([url('./'),url('./index.html')]);

@@ -1,0 +1,88 @@
+@font-face {
+  font-family: Inter;
+  src: url("../starmap/assets/Inter-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+[data-theme="christmas"] {
+  --ds-page-bg: #f8f4ee;
+  --ds-page-top: linear-gradient(#fbf0e8, #f8efe6 60%, #f8f4ee);
+  --ds-surface: #ffffff;
+  --ds-surface-muted: #fbf8f3;
+  --ds-line: #ece3d7;
+  --ds-text: #2f2a26;
+  --ds-text-strong: #1f1a17;
+  --ds-text-muted: #786d63;
+  --ds-accent: #c0303a;
+  --ds-accent-2: #2b7550;
+  --ds-accent-soft: #fbeaea;
+  --ds-gold: #e8b54a;
+  --ds-level-0: #ece6de;
+  --ds-level-1: #b8dcc4;
+  --ds-level-2: var(--ds-accent);
+  --ds-level-3: var(--ds-gold);
+  --ds-badge-locked: #d5ccc1;
+  --ds-hero-bg: linear-gradient(160deg, #ffffff 0%, #f7f1e8 55%, #eef0e6 100%);
+  --ds-hero-line: #eadfd2;
+  --ds-hero-text: #1f1a17;
+  --ds-hero-gold: #a87618;
+  --ds-hero-chip: rgba(192,48,58,.07);
+  --ds-photo-number: #22352b;
+  --ds-font: Inter, -apple-system, "PingFang SC", sans-serif;
+  --ds-weight-strong: 800;
+  --ds-weight-heavy: 950;
+  --ds-radius-card: 18px;
+  --ds-radius-hero: 20px;
+  --ds-radius-chip: 14px;
+  --ds-shadow-card: 0 8px 22px rgba(74,52,36,.06);
+  --ds-shadow-hero: 0 18px 44px -22px rgba(74,52,36,.26);
+  --ds-nav-bg: rgba(255,255,255,.97);
+  --ds-nav-shadow: 0 -10px 28px rgba(74,52,36,.12);
+  --ds-nav-active: var(--ds-accent);
+  --ds-radius-nav: 26px;
+}
+[data-theme="christmas"][data-mode="dark"] {
+  --ds-page-bg: #0f1c17;
+  --ds-page-top: linear-gradient(#173027, #13271f 60%, #0f1c17);
+  --ds-surface: #182a22;
+  --ds-surface-muted: #1f342a;
+  --ds-line: #34503f;
+  --ds-text: #e4eee8;
+  --ds-text-strong: #f8fbf8;
+  --ds-text-muted: #a6bcaf;
+  --ds-accent: #f26a6f;
+  --ds-accent-2: #6cc59a;
+  --ds-accent-soft: #3b2427;
+  --ds-gold: #ffd978;
+  --ds-level-0: #263b31;
+  --ds-level-1: #2f6a4d;
+  --ds-level-2: var(--ds-accent);
+  --ds-level-3: var(--ds-gold);
+  --ds-badge-locked: #6f8a7b;
+  --ds-hero-bg: radial-gradient(130% 90% at 50% 0%, #1a3a2d, #0b1612 72%);
+  --ds-hero-line: rgba(16,40,30,.9);
+  --ds-hero-text: #eef6f1;
+  --ds-hero-gold: #ffd978;
+  --ds-hero-chip: rgba(255,255,255,.06);
+  --ds-photo-number: #f8fbf8;
+  --ds-font: Inter, -apple-system, "PingFang SC", sans-serif;
+  --ds-weight-strong: 800;
+  --ds-weight-heavy: 950;
+  --ds-radius-card: 18px;
+  --ds-radius-hero: 20px;
+  --ds-radius-chip: 14px;
+  --ds-shadow-card: 0 8px 22px rgba(2,10,6,.28);
+  --ds-shadow-hero: 0 18px 44px -18px rgba(2,10,6,.55);
+  --ds-nav-bg: rgba(24,42,34,.97);
+  --ds-nav-shadow: 0 -10px 28px rgba(2,10,6,.42);
+  --ds-nav-active: var(--ds-accent);
+  --ds-radius-nav: 26px;
+}
+[data-theme="christmas"] :is(.galaxy,.achievement-hero,.celebration)::after {
+  content: ""; position: absolute; top: 10px; right: 12px;
+  width: 54px; height: 45px; background: url("./assets/holly-light.svg") center / contain no-repeat;
+  pointer-events: none;
+}
+[data-theme="christmas"][data-mode="dark"] :is(.galaxy,.achievement-hero,.celebration)::after {
+  background-image: url("./assets/holly-dark.svg");
+}

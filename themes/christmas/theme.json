@@ -1,0 +1,59 @@
+{
+  "ringLabel": "红环",
+  "signature": "snow",
+  "font": "../starmap/assets/Inter-Variable.ttf",
+  "stars": {
+    "light": {
+      "colors": [
+        "#b9c6d3",
+        "#8ea6bd",
+        "#c0303a",
+        "#2b7550"
+      ],
+      "weights": [
+        62,
+        26,
+        6,
+        5
+      ],
+      "radius": [
+        0.6,
+        1.5
+      ],
+      "goldEvery": 50,
+      "goldRadius": 2.15,
+      "viewBox": [
+        360,
+        188
+      ],
+      "slope": 0.51,
+      "spread": 0.19
+    },
+    "dark": {
+      "colors": [
+        "#ffffff",
+        "#dfe9f2",
+        "#f26a6f",
+        "#6cc59a"
+      ],
+      "weights": [
+        70,
+        22,
+        4,
+        3
+      ],
+      "radius": [
+        0.5,
+        1.4
+      ],
+      "goldEvery": 50,
+      "goldRadius": 2.15,
+      "viewBox": [
+        360,
+        188
+      ],
+      "slope": 0.51,
+      "spread": 0.19
+    }
+  }
+}

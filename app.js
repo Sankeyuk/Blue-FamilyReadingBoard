@@ -6,7 +6,7 @@ const READING_DAY_MINUTES = 5;
 const BLUE_RING_MINUTES = 30;
 const GOLD_RING_MINUTES = 60;
 const WEEK_GOAL_MINUTES = 210;
-const SHELL_VERSION = 'r26';
+const SHELL_VERSION = 'r27';
 const SHARE_LABELS = {day:'当天',week:'本周',month:'本月',year:'今年'};
 const PUBLIC_BOARD_URL = 'https://sankeyuk.github.io/Blue-FamilyReadingBoard/';
 const fallback = {
@@ -59,6 +59,11 @@ const legend = () => `<div class="legend">${levels.map((label, i) =>
 const achievementURL = (value) => `#achievements${value ? `/${value}` : ''}`;
 
 let state = {live:null, content:fallback, memories:{}, offline:false, preview:null, theme:null};
+let skinRegistry = [];
+let selectedSkin = null;
+let skinChanging = false;
+let skinNoticeTimer;
+const skinPackages = new Map();
 let avatarVisit = null;
 let photoSet = null;
 let avatarSwap = false;
@@ -148,8 +153,13 @@ function renderHeader(live, content) {
     ${portraits ? `<svg class="badge-arc" viewBox="0 0 104 64" aria-hidden="true">
       <circle cx="10" cy="19" r="1.5"/><circle cx="27" cy="10" r="1.7"/><circle class="arc-gold" cx="47" cy="4" r="2.5"/><circle cx="66" cy="8" r="1.8"/><circle cx="84" cy="16" r="1.5"/>
     </svg>` : ''}</div>`;
+  const name = `<span class="eyebrow">${esc(content.site.subtitle)}</span><span class="mast-title">${esc(content.site.name)}</span>`;
+  const skinName = skinRegistry.find((skin) => skin.id === documentTheme.theme)?.name ?? '';
+  const brand = skinRegistry.length > 1
+    ? `<button type="button" class="mast-brand skin-switch" aria-label="换皮肤，现在是 ${esc(skinName)}">${name}</button>`
+    : `<div class="mast-brand">${name}</div>`;
   return `<header class="mast">${badge}
-    <div class="mast-brand"><p class="eyebrow">${esc(content.site.subtitle)}</p><h1>${esc(content.site.name)}</h1></div>
+    <div class="mast-name">${brand}<span class="skin-notice" role="status" hidden></span></div>
     <div class="mast-status"><nav aria-label="看板页面">${pageLinks()}</nav>${state.offline ? '<span class="pill" role="status">离线</span>' : ''}</div></header>`;
 }
 function renderArrival(live, content) {
@@ -484,7 +494,7 @@ function renderWeek(live) {
     </div>
     ${first === through && !week.total_minutes ? '<p class="week-start">这周从今天开始</p>' : ''}
     <div class="week-rhythm">
-      <div class="heading"><h3>本周节奏</h3><span>勾 ${READING_DAY_MINUTES} 分钟 · 蓝环 ${BLUE_RING_MINUTES} 分钟 · 金环 1 小时</span></div>
+      <div class="heading"><h3>本周节奏</h3><span>勾 ${READING_DAY_MINUTES} 分钟 · ${esc(state.theme?.ringLabel ?? '蓝环')} ${BLUE_RING_MINUTES} 分钟 · 金环 1 小时</span></div>
       <div class="week-days">${rings}</div>
       <p class="reading-detail week-detail" role="status" hidden></p>
     </div>
@@ -1686,7 +1696,7 @@ function render({background = false} = {}) {
   const message = photo ? postcardMessage(content,entry) : '';
   const signature = content.site.share_signature ?? '';
   const postcardKey = photo && JSON.stringify([photo,entry.date,message,signature,documentTheme.theme,'light']);
-  if (background && (postcardKey ? shell.querySelector('.postcard')?.dataset.key === postcardKey :
+  if (background && shell.dataset.skin === documentTheme.theme && (postcardKey ? shell.querySelector('.postcard')?.dataset.key === postcardKey :
     shell.querySelector('.celebration') && shell.dataset.route === String(current.achievement) &&
     shell.dataset.photoLang === current.lang)) return;
   documentTheme.mode = displayMode(photo || (entry && photoUsesLight(current)));
@@ -1708,6 +1718,7 @@ function render({background = false} = {}) {
   clearTimeout(backTimer);
   delete shell.dataset.photoLang;
   const previousRoute = shell.dataset.route;
+  shell.dataset.skin = documentTheme.theme;
   shell.dataset.page = current.subpage ? 'detail' : 'home';
   shell.dataset.route = current.subpage ? String(current.page ?? (current.share && `share/${current.share}`) ?? current.achievement ?? 'achievements') : 'home';
   document.title = content.site.name;
@@ -1864,12 +1875,24 @@ async function loadLive(stamp) {
     return jsonResource('./sample/live.json'+suffix,validLive);
   }
 }
-async function loadTheme(registry, preference) {
-  const id = /^[a-z][a-z0-9-]*$/.test(preference) &&
-    registry?.themes.some((theme) => theme.id === preference) ? preference : 'starmap';
+function preferredSkin() {
+  if (selectedSkin) return selectedSkin;
+  let stored;
+  try { stored = localStorage.getItem('coreading:skin'); } catch {}
+  const requested = new URLSearchParams(location.search).get('theme');
+  return [requested,stored,state.content.site.theme]
+    .find((id) => skinRegistry.some((skin) => skin.id === id)) ?? skinRegistry[0]?.id ?? 'starmap';
+}
+
+async function loadTheme(preference) {
+  const id = skinRegistry.some((skin) => skin.id === preference) ? preference : 'starmap';
   try {
-    const {data} = await jsonResource(`./themes/${id}/theme.json`, (config) => Boolean(config?.stars?.light && config.stars.dark));
-    if (id !== 'starmap' && !document.getElementById(`theme-${id}`)) {
+    let data = skinPackages.get(id);
+    if (!data) {
+      ({data} = await jsonResource(`./themes/${id}/theme.json`, (config) => Boolean(config?.stars?.light && config.stars.dark)));
+      skinPackages.set(id,data);
+    }
+    if (!document.getElementById(`theme-${id}`)) {
       await new Promise((resolve,reject) => {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
@@ -1880,12 +1903,49 @@ async function loadTheme(registry, preference) {
         document.head.append(link);
       });
     }
-    document.documentElement.dataset.theme = id;
+    documentTheme.theme = id;
     state.theme = data;
+    syncThemeColors();
+    return true;
   } catch {
-    if (id !== 'starmap') await loadTheme(null,'starmap');
+    return false;
   }
 }
+
+async function cycleSkin() {
+  if (skinChanging || skinRegistry.length < 2) return;
+  skinChanging = true;
+  const index = skinRegistry.findIndex((skin) => skin.id === documentTheme.theme);
+  const next = skinRegistry[(index + 1) % skinRegistry.length];
+  try {
+    if (!await loadTheme(next.id)) {
+      const notice = shell.querySelector('.skin-notice');
+      if (notice) {
+        notice.textContent = '皮肤暂时无法加载，请稍后重试';
+        notice.hidden = false;
+      }
+      return;
+    }
+    selectedSkin = next.id;
+    if (!new URLSearchParams(location.search).has('theme')) {
+      try { localStorage.setItem('coreading:skin',next.id); } catch {}
+    }
+    render();
+    shell.querySelector('.skin-switch')?.focus({preventScroll:true});
+    const notice = shell.querySelector('.skin-notice');
+    if (notice) {
+      clearTimeout(skinNoticeTimer);
+      notice.textContent = next.name;
+      notice.hidden = false;
+      skinNoticeTimer = setTimeout(() => { notice.hidden = true; },1500);
+    }
+  } finally {
+    skinChanging = false;
+  }
+}
+shell.addEventListener('click',(event) => {
+  if (event.target.closest('.skin-switch')) void cycleSkin();
+});
 
 let requestId = 0;
 let analyticsEligible = false;
@@ -1907,8 +1967,11 @@ async function update() {
   if (readerFamily === undefined && content.status === 'fulfilled') readerFamily = chooseReaderFamily(state.content.family);
   state.offline = !navigator.onLine || live.status === 'rejected' || Boolean(live.value?.cached);
   if (!state.offline && syncStatus === 'offline') syncStatus = '';
-  const preference = new URLSearchParams(location.search).get('theme') || state.content.site.theme;
-  await loadTheme(registry.value?.data,preference);
+  if (registry.status === 'fulfilled') {
+    skinRegistry = registry.value.data.themes.filter((skin) => /^[a-z][a-z0-9-]*$/.test(skin.id));
+  }
+  if (!skinRegistry.length) skinRegistry = [{id:'starmap',name:'星图'}];
+  await loadTheme(preferredSkin());
   if (id === requestId) {
     render({background:true});
     scheduleFamilyWarmup();

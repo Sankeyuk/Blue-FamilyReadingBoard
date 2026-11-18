@@ -14,7 +14,17 @@ h2 { font-size: 16px; }
 .shell[data-page="detail"] { max-width: 810px; }
 main { display: grid; gap: 12px; }
 .mast { display: grid; grid-template-columns: minmax(94px,1fr) minmax(0,auto) minmax(94px,1fr); align-items: center; gap: 8px; padding: 2px 1px 15px; }
-.mast-brand { text-align: center; }
+.mast-name { position: relative; min-width: 0; }
+.mast-brand { display: block; text-align: center; }
+.mast-brand > span { display: block; }
+.mast-title { color: var(--ds-text-strong); font-size: 25px; font-weight: var(--ds-weight-strong); line-height: 1.2; }
+.skin-switch { width: 100%; padding: 0; border: 0; color: inherit; background: transparent; font: 14px/1.5 var(--ds-font); cursor: pointer; }
+.skin-switch:active { transform: scale(.97); }
+.skin-switch:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 4px; border-radius: 3px; }
+.skin-notice { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); white-space: nowrap; color: var(--ds-text-muted); font-size: 10px; animation: skin-notice 1.5s ease both; }
+.skin-notice[hidden] { display: none; }
+@keyframes skin-notice { 0% { opacity: 0; } 15%,80% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .skin-notice { animation: none; } }
 .mast-status { display: grid; justify-items: end; justify-self: end; }
 .page-links { display: inline-flex; align-items: center; color: var(--ds-text-muted); white-space: nowrap; }
 .page-links a { display: grid; place-items: center; min-width: 44px; min-height: 44px; font-size: 14px; }
@@ -293,7 +303,7 @@ html[data-postcard] .shell[data-page="detail"] { max-width: none; padding: 0; }
   .panel { padding: 12px; }
   .today-note { font-size: 10px; }
   .mast { gap: 5px; }
-  .mast h1 { font-size: 21px; }
+  .mast h1,.mast-title { font-size: 21px; }
 }
 
 .photo-copy,.photo-back { display: none; }
@@ -469,3 +479,6 @@ html[data-postcard] .shell[data-page="detail"] { max-width: none; padding: 0; }
 [data-mode="dark"] .medal.major:not(.locked) {
   background: linear-gradient(145deg,var(--ds-surface),color-mix(in srgb,var(--ds-surface) 75%,var(--ds-gold)));
 }
+
+.heatmap > .heading { flex-wrap: wrap; }
+.heatmap > .heading h2 { white-space: nowrap; flex: 0 0 auto; }
