@@ -1,12 +1,12 @@
 {
  "schema_version": 1,
- "generated_at": "2026-11-24T20:28:49+08:00",
- "fetched_at": "2026-11-24T20:28:46+08:00",
+ "generated_at": "2026-11-24T20:39:28+08:00",
+ "fetched_at": "2026-11-24T20:39:19+08:00",
  "data_through": "2026-11-24",
  "today": {
   "date": "2026-11-24",
   "weekday": 2,
-  "minutes": 35.65,
+  "minutes": 41.37,
   "level": 2,
   "read": true,
   "is_partial": true
@@ -35,9 +35,9 @@
   "days_elapsed": 2,
   "record_days": 2,
   "coverage": 1.0,
-  "total_minutes": 100.77,
-  "total_hours": 1.68,
-  "avg_per_day": 50.38,
+  "total_minutes": 106.48,
+  "total_hours": 1.77,
+  "avg_per_day": 53.24,
   "days_30": 2,
   "days_60": 1,
   "is_partial": true,
@@ -51,7 +51,7 @@
    {
     "date": "2026-11-24",
     "weekday": 2,
-    "minutes": 35.65,
+    "minutes": 41.37,
     "level": 2
    }
   ],
@@ -77,9 +77,9 @@
   "days_elapsed": 24,
   "record_days": 24,
   "coverage": 1.0,
-  "total_minutes": 1324.37,
-  "total_hours": 22.07,
-  "avg_per_day": 55.18,
+  "total_minutes": 1330.08,
+  "total_hours": 22.17,
+  "avg_per_day": 55.42,
   "days_30": 20,
   "days_60": 13,
   "is_partial": true,
@@ -225,7 +225,7 @@
    {
     "date": "2026-11-24",
     "weekday": 2,
-    "minutes": 35.65,
+    "minutes": 41.37,
     "level": 2
    }
   ],
@@ -245,19 +245,19 @@
  "lifetime": {
   "since": "2023-09-17",
   "first_record": "2024-01-12",
-  "total_hours": 309.26,
+  "total_hours": 309.36,
   "record_days": 470
  },
  "next": {
   "next_milestone_hours": 350,
   "next_milestone_kind": "minor",
-  "hours_to_milestone": 40.74,
+  "hours_to_milestone": 40.64,
   "next_milestone_eta": "2027-01-08",
   "next_milestone_celebration": "第 350 小时：由孩子挑一本新书，晚饭时一家人说说这一阶段最喜欢的一本",
   "next_major_hours": 400,
-  "hours_to_major": 90.74,
+  "hours_to_major": 90.64,
   "next_major_eta": "2027-03-04",
-  "pace_hours_per_day": 0.909,
+  "pace_hours_per_day": 0.912,
   "pace_days": 28
  },
  "roadmap": [
@@ -552,7 +552,7 @@
   },
   {
    "month": "2026-11",
-   "cum_hours": 309.26
+   "cum_hours": 309.36
   }
  ],
  "levels_by_year": {
@@ -1625,7 +1625,7 @@
    20.7,
    38.9,
    65.1,
-   35.6,
+   41.4,
    null,
    null,
    null,
@@ -1677,7 +1677,7 @@
    "days_30": 23
   },
   "2026": {
-   "total_hours": 251.25,
+   "total_hours": 251.35,
    "record_days": 306,
    "days_30": 242
   }
